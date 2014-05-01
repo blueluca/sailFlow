@@ -1,0 +1,12 @@
+BUGS
+X PDF writer does not work
+- twist does not work with the pointed ends
+
+
+BEFORE RELEASE 
+- (in processing) PDF generator to split over multiple files
+- Flattener to work on object mode
+
+IMPROVEMENTS
+- One custom parameter for the custom_profile routine
+- A0 and other format predefined figure to check before generating PDF
