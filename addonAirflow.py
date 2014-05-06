@@ -186,7 +186,7 @@ class MyPoly:
         return Vxs[self.p3].co
  
     def flatAllVertices(self):
-        global Vxs
+        global Vxs  
  
         # debug("    Flat start"+str(Vxs[self.p1].co)+str(Vxs[self.p2].co)+str(Vxs[self.p3].co))
         self.zeroZ()
