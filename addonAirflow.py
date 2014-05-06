@@ -950,7 +950,7 @@ class printPDF(bpy.types.Operator):
                                 pdf.line(cross1.x+self.offSet,(pdf.dimension()[1]-cross1.y)-self.offSet,cross2.x+self.offSet,(pdf.dimension()[1]-cross2.y)-self.offSet)
                             
                     pdf.set_x(0)
-                    pdf.set_y(0)
+                    pdf.set_y(0)   
                     date = str(time.localtime().tm_mday) + "/" + str(time.localtime().tm_mon) + "/" + str(time.localtime().tm_year)
                     pdf.set_font('Arial', 'B', 24)
                     pdf.cell(w=75, h=10, txt=a.name+"V:"+str(h)+" H:"+str(v), border=1, ln=2, align='C')
