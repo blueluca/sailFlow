@@ -25,6 +25,14 @@ from fpdf import FPDF
 import time
 import imp
 
+PYDEV_SOURCE_DIR ='/Users/lstagnar/eclipse/plugins/org.python.pydev_2.8.2.2013090511/pysrc'
+ 
+#PYDEV_SOURCE_DIR = 'C:/eclipse/plugins/org.python.pydev_3.0.0.201311051910/pysrc'
+  
+if sys.path.count(PYDEV_SOURCE_DIR) < 1:
+   sys.path.append(PYDEV_SOURCE_DIR)
+import pydevd
+  
 custom_profile = None   
 
 Vxs = []
@@ -536,7 +544,7 @@ class VIEW3D_PT_airprofile_parameters(bpy.types.Panel):
         if sce.airflow_model.t == 'NACA':
             col.prop(sce.airflow_model, "m")
             col.prop(sce.airflow_model, "p")
-            
+             
         elif sce.airflow_model.t == "THREE":
             col = layout.column(align=True)
             col.label(text="Section 1:")
@@ -813,28 +821,39 @@ class printPDF(bpy.types.Operator):
     
     filepath = bpy.props.StringProperty(subtype="FILE_PATH")
   
-    def containedIn(self,v,w,h,offSetH,offSetV):
-        return (v.x > offSetH and v.x < offSetH+w and v.y > offSetV and v.y < offSetV+h)
+    def containedIn(self,v,w,h):
+        return (v.x >= 0 and v.x <= w and v.y >= 0 and v.y <= h)
           
-    def clipping(self,v1,v2,w,h,offSetH,offSetV):
+    def clipping(self,v1,v2,w,h):
         vout1 = None
         vout2 = None
-        v = mathutils.geometry.intersect_line_line_2d(v1,v2,Vector((offSetH,offSetV,0)),Vector((offSetH+w,offSetV,0)))
-        if v:
-            vout1 = v
-        v = mathutils.geometry.intersect_line_line_2d(v1,v2,Vector((offSetH+w,offSetV,0)),Vector((offSetH+w,offSetV+h,0)))
-        if v:
-            if vout1 == None:
-                vout1 = v
-            else:
-                vout2 = v
-        v = mathutils.geometry.intersect_line_line_2d(v1,v2,Vector((offSetH+w,offSetV+h,0)),Vector((offSetH,offSetV+h,0)))
+        if self.containedIn(v1,w,h):
+            vout1 = v1
+        if self.containedIn(v2,w,h):
+            vout1 = v2
+
+        v = mathutils.geometry.intersect_line_line_2d(v1,v2,Vector((0,0,0)),Vector((w,0,0)))
         if v:
             if vout1 == None:
                 vout1 = v
             else:
                 vout2 = v
-        v = mathutils.geometry.intersect_line_line_2d(v1,v2,Vector((offSetH,offSetV+h,0)),Vector((offSetH,offSetV,0)))
+                return vout1,vout2
+        v = mathutils.geometry.intersect_line_line_2d(v1,v2,Vector((w,0,0)),Vector((w,h,0)))
+        if v:
+            if vout1 == None:
+                vout1 = v
+            else:
+                vout2 = v
+                return vout1,vout2
+        v = mathutils.geometry.intersect_line_line_2d(v1,v2,Vector((w,h,0)),Vector((0,h,0)))
+        if v:
+            if vout1 == None:
+                vout1 = v
+            else:
+                vout2 = v
+                return vout1,vout2
+        v = mathutils.geometry.intersect_line_line_2d(v1,v2,Vector((0,h,0)),Vector((0,0,0)))
         if v:
             if vout1 == None:
                 vout1 = v
@@ -859,7 +878,6 @@ class printPDF(bpy.types.Operator):
         vxs_pix = []
         for v in vxs:
             vc = a.matrix_world * v.co        
-            print(vc)
             vxs_pix.append(Vector([(vc.x - min_x) * self.unitToMm, (vc.y - min_y) * self.unitToMm]))
 
         fname = self.filepath   
@@ -899,33 +917,37 @@ class printPDF(bpy.types.Operator):
                     miny = v.y
             numPagesH = int((maxx - minx)/clipSizeH)+1
             numPagesV = int((maxy - miny)/clipSizeV)+1  
-            print("Num pages H & V,",maxx,minx,maxy,miny,"-->",numPagesH,numPagesV)      
+            print("Num pages H & V,",clipSizeH,clipSizeV," pages -->",numPagesH,numPagesV)      
+
+            pydevd.settrace(stdoutToServer=True, stderrToServer=True, suspend=True)
+ 
             for h in range(0,numPagesH):
                 for v in range(0,numPagesV):
                     pdf.add_page()
                     print("New page h=%d v=%d"%(h,v))
                     for e in pe:
-                        if (self.containedIn(vxs_pix[e[0]],clipSizeH, clipSizeV, clipSizeH*h, clipSizeV*v) and
-                            self.containedIn(vxs_pix[e[1]],clipSizeH, clipSizeV, clipSizeH*h, clipSizeV*v)) :
-                            cross1 = vxs_pix[e[0]]
-                            cross2 = vxs_pix[e[1]]
-                        #else:
-                         #   cross1, cross2 = self.clipping(vxs_pix[e[0]],vxs_pix[e[1]],clipSizeH, clipSizeV, clipSizeH*h, clipSizeV*v)
-                            # Remove the bias and add the page bias, but with only 5% margin
-                        #if cross1 != None and cross2 != None:
-                            #===================================================
-                            # cross1.x += -clipSizeH*h + pdf.dimension()[0]*0.05
-                            # cross2.x += -clipSizeH*h + pdf.dimension()[0]*0.05
-                            # cross1.y += -clipSizeV*v - pdf.dimension()[1]*0.05
-                            # cross2.y += -clipSizeV*v - pdf.dimension()[1]*0.05                                                           
-                            #===================================================
-                            #===================================================
-                            # cross1.x -= clipSizeH*h 
-                            # cross2.x -= clipSizeH*h 
-                            # cross1.y -= clipSizeV*v 
-                            # cross2.y -= clipSizeV*v                                                            
-                            #===================================================
-                            pdf.line(cross1.x,cross1.y,cross2.x,cross2.y)
+                        # Translate the points
+                        cross1 = vxs_pix[e[0]]
+                        cross2 = vxs_pix[e[1]]
+                        cross1.x -= clipSizeH*h
+                        cross2.x -= clipSizeH*h
+                        cross1.y -= clipSizeV*v
+                        cross2.y -= clipSizeV*v
+                        
+                        if (self.containedIn(cross1,clipSizeH, clipSizeV) and
+                            self.containedIn(cross2,clipSizeH, clipSizeV)):
+                            print("  All contained",cross1,cross2)
+                            pdf.line(cross1.x+self.offSet,(pdf.dimension()[1]-cross1.y)-self.offSet,cross2.x+self.offSet,(pdf.dimension()[1]-cross2.y)-self.offSet)
+                        else:
+                            print("  clipping",cross1,cross2)
+                            cross1, cross2 = self.clipping(cross1,cross2,clipSizeH, clipSizeV)
+                            if cross1 != None and cross2 != None:
+                                print("  clipping success ",cross1,cross2)
+                                cross1.x += pdf.dimension()[0]*0.05
+                                cross2.x += pdf.dimension()[0]*0.05
+                                cross1.y += pdf.dimension()[1]*0.05
+                                cross2.y += pdf.dimension()[1]*0.05                                                           
+                                pdf.line(cross1.x+self.offSet,(pdf.dimension()[1]-cross1.y)-self.offSet,cross2.x+self.offSet,(pdf.dimension()[1]-cross2.y)-self.offSet)
                             
                     pdf.set_x(0)
                     pdf.set_y(0)
