@@ -24,14 +24,6 @@ from bpy.props import IntProperty, EnumProperty, BoolProperty, StringProperty
 from fpdf import FPDF
 import time
 import imp
-
-PYDEV_SOURCE_DIR ='/Users/lstagnar/eclipse/plugins/org.python.pydev_2.8.2.2013090511/pysrc'
- 
-#PYDEV_SOURCE_DIR = 'C:/eclipse/plugins/org.python.pydev_3.0.0.201311051910/pysrc'
-  
-if sys.path.count(PYDEV_SOURCE_DIR) < 1:
-   sys.path.append(PYDEV_SOURCE_DIR)
-import pydevd
   
 custom_profile = None   
 
@@ -817,7 +809,7 @@ class printPDF(bpy.types.Operator):
     bl_description = "print PDF of selected panels"
 
     unitToMm = 1000
-    offSet = 20 
+
     
     filepath = bpy.props.StringProperty(subtype="FILE_PATH")
   
@@ -828,36 +820,42 @@ class printPDF(bpy.types.Operator):
         vout1 = None
         vout2 = None
         if self.containedIn(v1,w,h):
+            print(" clipping: V1 already in ")
             vout1 = v1
         if self.containedIn(v2,w,h):
+            print(" clipping: V2 already in ")
             vout1 = v2
 
         v = mathutils.geometry.intersect_line_line_2d(v1,v2,Vector((0,0,0)),Vector((w,0,0)))
         if v:
+            print(" clipping: h bassa")
             if vout1 == None:
                 vout1 = v
-            else:
+            elif (v != vout1):
                 vout2 = v
                 return vout1,vout2
         v = mathutils.geometry.intersect_line_line_2d(v1,v2,Vector((w,0,0)),Vector((w,h,0)))
         if v:
+            print(" clipping: v destra")
             if vout1 == None:
                 vout1 = v
-            else:
+            elif (v != vout1):
                 vout2 = v
                 return vout1,vout2
         v = mathutils.geometry.intersect_line_line_2d(v1,v2,Vector((w,h,0)),Vector((0,h,0)))
         if v:
+            print(" clipping: h alta")
             if vout1 == None:
                 vout1 = v
-            else:
+            elif (v != vout1):
                 vout2 = v
                 return vout1,vout2
         v = mathutils.geometry.intersect_line_line_2d(v1,v2,Vector((0,h,0)),Vector((0,0,0)))
         if v:
+            print(" clipping: v sinistra")            
             if vout1 == None:
                 vout1 = v
-            else:
+            elif (v != vout1):
                 vout2 = v
         return vout1,vout2
         
@@ -874,7 +872,6 @@ class printPDF(bpy.types.Operator):
         
         min_x = min(xs)
         min_y = min(ys)
-        max_y = max(ys)
         vxs_pix = []
         for v in vxs:
             vc = a.matrix_world * v.co        
@@ -882,6 +879,7 @@ class printPDF(bpy.types.Operator):
 
         fname = self.filepath   
         pdf = FPDF(format=fmt)
+        self.offSet = pdf.dimension()[0]*0.01 
         pdf.set_compression(False)
         if not mp:
             pdf.add_page()
@@ -904,8 +902,8 @@ class printPDF(bpy.types.Operator):
             maxy = -100000
             miny = 100000
             minx = 100000
-            clipSizeH = int(pdf.dimension()[0]*0.9)  #90% of the availiable space
-            clipSizeV = int(pdf.dimension()[1]*0.9)  #90% of the availiable space
+            clipSizeH = int(pdf.dimension()[0]-2*self.offSet) 
+            clipSizeV = int(pdf.dimension()[1]-2*self.offSet)  
             for v in vxs_pix:
                 if minx > v.x:
                     minx = v.x
@@ -918,8 +916,6 @@ class printPDF(bpy.types.Operator):
             numPagesH = int((maxx - minx)/clipSizeH)+1
             numPagesV = int((maxy - miny)/clipSizeV)+1  
             print("Num pages H & V,",clipSizeH,clipSizeV," pages -->",numPagesH,numPagesV)      
-
-            pydevd.settrace(stdoutToServer=True, stderrToServer=True, suspend=True)
  
             for h in range(0,numPagesH):
                 for v in range(0,numPagesV):
@@ -937,18 +933,18 @@ class printPDF(bpy.types.Operator):
                         if (self.containedIn(cross1,clipSizeH, clipSizeV) and
                             self.containedIn(cross2,clipSizeH, clipSizeV)):
                             print("  All contained",cross1,cross2)
-                            pdf.line(cross1.x+self.offSet,(pdf.dimension()[1]-cross1.y)-self.offSet,cross2.x+self.offSet,(pdf.dimension()[1]-cross2.y)-self.offSet)
+                            pdf.line(cross1.x+self.offSet,(pdf.dimension()[1]-cross1.y)+self.offSet,
+                                     cross2.x+self.offSet,(pdf.dimension()[1]-cross2.y)+self.offSet)
                         else:
                             print("  clipping",cross1,cross2)
                             cross1, cross2 = self.clipping(cross1,cross2,clipSizeH, clipSizeV)
                             if cross1 != None and cross2 != None:
-                                print("  clipping success ",cross1,cross2)
-                                cross1.x += pdf.dimension()[0]*0.05
-                                cross2.x += pdf.dimension()[0]*0.05
-                                cross1.y += pdf.dimension()[1]*0.05
-                                cross2.y += pdf.dimension()[1]*0.05                                                           
-                                pdf.line(cross1.x+self.offSet,(pdf.dimension()[1]-cross1.y)-self.offSet,cross2.x+self.offSet,(pdf.dimension()[1]-cross2.y)-self.offSet)
-                            
+                                print("  clipping success ",cross1,cross2)                                                          
+                                pdf.line(cross1.x+self.offSet,(pdf.dimension()[1]-cross1.y)+self.offSet,
+                                         cross2.x+self.offSet,(pdf.dimension()[1]-cross2.y)+self.offSet)
+                     
+                   # pdf.set_line_width(0.2)        
+                   # pdf.rect(self.offSet/2,self.offSet/2,pdf.dimension()[0]-2*self.offSet/2,pdf.dimension()[1]-2*self.offSet/2)
                     pdf.set_x(0)
                     pdf.set_y(0)   
                     date = str(time.localtime().tm_mday) + "/" + str(time.localtime().tm_mon) + "/" + str(time.localtime().tm_year)
