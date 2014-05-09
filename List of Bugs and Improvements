@@ -4,7 +4,7 @@ X PDF writer does not work
 
 
 BEFORE RELEASE 
-- (in processing) PDF generator to split over multiple files
+X (in processing) PDF generator to split over multiple files
 - Flattener to work on object mode
 
 IMPROVEMENTS
