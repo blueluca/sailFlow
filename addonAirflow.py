@@ -13,7 +13,6 @@ import bpy
 import sys
 import mathutils
 import math
-from mathutils import Vector, Euler
 
 from math import *
 from mathutils import Vector, Euler,geometry
@@ -24,7 +23,14 @@ from bpy.props import IntProperty, EnumProperty, BoolProperty, StringProperty
 from fpdf import FPDF
 import time
 import imp
+
+PYDEV_SOURCE_DIR = 'C:/eclipse/plugins/org.python.pydev_3.4.1.201403181715/pysrc'
   
+if sys.path.count(PYDEV_SOURCE_DIR) < 1:
+   sys.path.append(PYDEV_SOURCE_DIR)
+import pydevd
+  
+
 custom_profile = None   
 
 Vxs = []
@@ -221,7 +227,43 @@ class MyPoly:
         if a in [1, 3] and b in [1, 3]:
             return self.l1
  
-    def setToFlat(self, master, slave, flatted):
+    def setToFlat(self,a,b,flatted):
+        xa = self.x(a)
+        ya = self.y(a)
+        xb = self.x(b)
+        yb = self.y(b)
+        print(self,end='')
+        print("SetToFlat (a=%d,b=%d,f=%d) xa=%2.2f,ya=%2.2f,xb=%2.2f,yb=%2.2f"%(a,b,flatted,xa,ya,xb,yb))
+        d = self.edgeLength(a, b)
+        ra = self.edgeLength(a,flatted)
+        rb = self.edgeLength(b,flatted)
+        #print("          d=%2.2f ra=%2.2f rb=%2.2f"%(d,ra,rb))
+        k = 0.25*math.sqrt((((ra+rb)*(ra+rb)-(d*d))*(d*d-(ra-rb)*(ra-rb))))
+        x1 = 0.5*(xb+xa)+0.5*(xb-xa)*(ra*ra - rb*rb)/(d*d) + 2*(yb-ya)*k/(d*d)
+        x2 = 0.5*(xb+xa)+0.5*(xb-xa)*(ra*ra - rb*rb)/(d*d) - 2*(yb-ya)*k/(d*d)
+        y1 = 0.5*(yb+ya)+0.5*(yb-ya)*(ra*ra - rb*rb)/(d*d) - 2*(xb-xa)*k/(d*d)
+        y2 = 0.5*(yb+ya)+0.5*(yb-ya)*(ra*ra - rb*rb)/(d*d) + 2*(xb-xa)*k/(d*d)
+        #print("          x1=%2.2f y1=%2.2f x2=%2.2f y2=%2.2f"%(x1,y1,x2,y2))
+
+        va = Vector([xa,ya])
+        vb = Vector([xb,yb])
+        vc1 = Vector([x1,y1])
+        if self.clockWise(va,vb,vc1):
+            self.setx(flatted,x1)
+            self.sety(flatted,y1)
+        else:
+            self.setx(flatted,x2)
+            self.sety(flatted,y2)  
+        
+        print("  p1-p3 diff %2.2f perc %2.2f"%(self.l1- (Vxs[self.p1].co - Vxs[self.p3].co).length,
+                                               (self.l1- (Vxs[self.p1].co - Vxs[self.p3].co).length)/self.l1),end='')
+        print("  p1-p2 diff %2.2f perc %2.2f"%(self.l2 - (Vxs[self.p1].co - Vxs[self.p2].co).length,
+                                               (self.l2 - (Vxs[self.p1].co - Vxs[self.p2].co).length)/self.l2),end='')
+        print("  p2-p3 diff %2.2f perc %2.2f"%(self.l3 - (Vxs[self.p2].co - Vxs[self.p3].co).length,
+                                               (self.l3 - (Vxs[self.p2].co - Vxs[self.p3].co).length)/self.l3))
+              
+        
+    def OLDsetToFlat(self, master, slave, flatted):
         if self.x(master) > self.x(slave):
             x0 = self.x(slave)
             y0 = self.y(slave)
@@ -238,7 +280,7 @@ class MyPoly:
             d = self.edgeLength(master, slave)
             R = self.edgeLength(master, flatted)
             r = self.edgeLength(slave, flatted)
- 
+        
         x, y = self.doubleCircle(d, R, r)
         if (x1 - x0) < 0.000000001:
             k = 100000000
@@ -268,11 +310,8 @@ class MyPoly:
     def flatten (self):
         global Vxs
         global VxFlat
-        
-#        print("z's %2.2f %2.2f %2.2f"%(self.z(1),self.z(2),self.z(3)))
-#        print("flat ",VxFlat)
+
         if (self.p1 in VxFlat) and (self.p2 in VxFlat) and (self.p3 in VxFlat) : 
-            # debug("Already flat",3)
             return 0
         elif (((self.p1 not in VxFlat) and (self.p2 not in VxFlat)) or
              ((self.p1 not in VxFlat) and (self.p3 not in VxFlat)) or
@@ -280,13 +319,10 @@ class MyPoly:
             self.flatAllVertices()
         else:
             if  self.p3 not in VxFlat:
-                # debug("     flat to p3", 3)
                 self.setToFlat(1, 2, 3)
             elif self.p1 not in VxFlat:
-                # debug("     flat to p1", 3)
                 self.setToFlat(2, 3, 1)
             elif self.p2 not in VxFlat:
-                # debug("     flat to p2", 3)
                 self.setToFlat(3, 1, 2)
 
         self.zeroZ()
@@ -322,7 +358,8 @@ class Flattener(bpy.types.Operator):
     def minimizeEnergy(self, F, maxDeformation, deltaDeformation):
         global Vxs
         
-        MAXCOUNT = 10000
+        #  print("Energy minimizer")
+        MAXCOUNT = 5000
         dx = deltaDeformation
         dy = deltaDeformation
 #        print("Start minimize")
@@ -349,7 +386,6 @@ class Flattener(bpy.types.Operator):
                     dl = (Vxs[v[0]].co - Vxs[vix].co).length - v[1]
                     #dl = difference between original length and new length
                     energy = energy + dl*dl/ v[1]
-    
                 originalCo = Vxs[vix].co
                 overallpdx = 0.0
                 overallmdx = 0.0
@@ -396,7 +432,7 @@ class Flattener(bpy.types.Operator):
                     maxGain = nodesMovToGain[n][2]
                     maxIdx = n
             if maxIdx:
-#                print("%d) Max reduction for node %d, Denergy %.6f coord %2.4f %2.4f"%(count,maxIdx,nodesMovToGain[maxIdx][2],Vxs[maxIdx].co.x,Vxs[maxIdx].co.y))
+              #  print("%d) Max reduction for node %d, Denergy %.6f coord %2.4f %2.4f"%(count,maxIdx,nodesMovToGain[maxIdx][2],Vxs[maxIdx].co.x,Vxs[maxIdx].co.y))
                 Vxs[maxIdx].co.x += nodesMovToGain[maxIdx][0]
                 Vxs[maxIdx].co.y += nodesMovToGain[maxIdx][1]
             else:
@@ -422,18 +458,12 @@ class Flattener(bpy.types.Operator):
         VxFlat = []
         me = obj.data
         Vxs = me.vertices[:]
-        #=======================================================================
-        # for v in Vxs:
-        #     v.co = obj.matrix_world * v.co 
-        #     v.co.z = v.co.z + 0.1
-        # # Copy the faces
-        #=======================================================================
+        
+        pydevd.settrace(stdoutToServer=True, stderrToServer=True, suspend=True)
         s = None
-        poligs = me.polygons[:]
         for p in me.polygons:
             if p.select:
                 vt = MyPoly(p, idx=p.index)
-                # debug("Created :" + str(vt), 2)
                 V.append(vt)
          
         while V or A:
@@ -441,7 +471,6 @@ class Flattener(bpy.types.Operator):
                 s = A.pop()
             else:
                 s = V.pop()
-            # debug("Taken new face: " + str(s),2)
             # Collect all the adjacent triangle
             # and put it in Active collection "A"
             found = True
@@ -450,7 +479,7 @@ class Flattener(bpy.types.Operator):
                 if at:
                     # debug("..adj is"+str(at))
                     A.append(at)
-                    V.remove(at)
+                    V.remove(at) 
                     found = True
                 else:
                     found = False
@@ -476,23 +505,40 @@ class Flattener(bpy.types.Operator):
             
         self.makeItFlat(bpy.context.active_object, sce.airflow_model.energyMinimizer, sce.airflow_model.maxDeformation, sce.airflow_model.deltaDeformation)
         # Complet list of vertices used
-        vIdxList = []
+        #=======================================================================
+        # vIdxList = []
+        # faces = []
+        # vertices = []
+        # for p in F:
+        #     vIdxList.append(p.p1)
+        #     vIdxList.append(p.p2)
+        #     vIdxList.append(p.p3)
+        # vIdxList.sort()
+        # # The following remove duplicates
+        # vIdxList = list(set(vIdxList))
+        # for p in F:
+        #     p.p1 = vIdxList.index(p.p1)
+        #     p.p2 = vIdxList.index(p.p2)
+        #     p.p3 = vIdxList.index(p.p3)
+        #     faces.append([p.p1, p.p2, p.p3])
+        # for vidx in vIdxList:
+        #     vertices.append([Vxs[vidx].co.x, Vxs[vidx].co.y, Vxs[vidx].co.z])
+        #=======================================================================
+
+# ============================================================        
         faces = []
         vertices = []
-        for p in F:
-            vIdxList.append(p.p1)
-            vIdxList.append(p.p2)
-            vIdxList.append(p.p3)
-        vIdxList.sort()
-        # The following remove duplicates
-        vIdxList = list(set(vIdxList))
-        for p in F:
-            p.p1 = vIdxList.index(p.p1)
-            p.p2 = vIdxList.index(p.p2)
-            p.p3 = vIdxList.index(p.p3)
-            faces.append([p.p1, p.p2, p.p3])
-        for vidx in vIdxList:
-            vertices.append([Vxs[vidx].co.x, Vxs[vidx].co.y, Vxs[vidx].co.z])
+        count = 0
+        idx=0
+        while F:
+            for p in F:
+                faces.append([p.p1, p.p2, p.p3])
+                idx = idx + 1
+                F.remove(p)
+        for v in Vxs:
+            vertices.append([v.co.x, v.co.y, v.co.z])
+
+# =========================================================
 
         fmesh = bpy.data.meshes.new("panel")
         fmesh.from_pydata(vertices, [], faces)
@@ -716,7 +762,8 @@ class AirProfile(bpy.types.Operator):
 
         if ctype == 'NACA':            
             for v in a.data.vertices:
-                if not v.index in pv:
+#                if not (v.index in pv) or True:
+                if True:
                     e1, e2 = self.getEdgesCrossing(a.data.vertices, pe, v.co.y)
                     if e1[0] != -1 and e2[0] != -1:
                         x1 = self.getXinEdge(a.data.vertices, e1, v.co.y)
@@ -802,8 +849,7 @@ class AirProfile(bpy.types.Operator):
     @classmethod
     def poll(cls, context):
         return context.active_object and context.active_object.type == 'MESH'
-    
-  
+     
 class printPDF(bpy.types.Operator):
     bl_idname = "mesh.print_pdf"
     bl_label = "Print PDF"
@@ -1041,8 +1087,7 @@ class AirFoilSettings(bpy.types.PropertyGroup):
     paperFormat = bpy.props.EnumProperty (name = "Paper Size", default="A4",items=paperSizes)   
     freeText = bpy.props.StringProperty (name = "Free Text", description = "Anything appearing in the PDF", default = 'free text')
     multiPages = bpy.props.BoolProperty(name="Multi pages",default=False)
-    
-                                
+                                    
 def register():
     bpy.utils.register_module(__name__)
     bpy.types.Scene.airflow_model = bpy.props.PointerProperty(type=AirFoilSettings,
