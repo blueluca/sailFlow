@@ -82,7 +82,8 @@ class MyPoly:
         co1 = Vxs[a1].co
         co2 = Vxs[a2].co
         co3 = Vxs[a3].co
- 
+        
+    #    print("Init ",a1,"-",co1,a2,"-",co2,a3,"-",co3)
         if self.clockWise(co1, co2, co3):
             self.p1 = a1
             self.p2 = a2
@@ -108,12 +109,13 @@ class MyPoly:
             self.p2 = a2
             self.p3 = a1
  
-        self.l1 = (Vxs[self.p1].co - Vxs[self.p3].co).length
-        self.l2 = (Vxs[self.p1].co - Vxs[self.p2].co).length
-        self.l3 = (Vxs[self.p2].co - Vxs[self.p3].co).length
+        self.l1 = abs((Vxs[self.p1].co - Vxs[self.p3].co).length)
+        self.l2 = abs((Vxs[self.p1].co - Vxs[self.p2].co).length)
+        self.l3 = abs((Vxs[self.p2].co - Vxs[self.p3].co).length)
         self.idx = idx
         self.vertices = [self.p1, self.p2, self.p3]
- 
+    #    print("Init end ",self)
+        
     def __iter__(self):
         return self
  
@@ -186,7 +188,7 @@ class MyPoly:
     def flatAllVertices(self):
         global Vxs     
  
-        # debug("    Flat start"+str(Vxs[self.p1].co)+str(Vxs[self.p2].co)+str(Vxs[self.p3].co))
+     #   print("    Flat start",self)
         self.zeroZ()
         if self.x(1) < self.x(2):
             d = self.l2
@@ -211,7 +213,7 @@ class MyPoly:
             self.setx(1, self.l2)
             self.sety(1, 0)
  
-        # debug("    Flat end ["+str(self.idx)+ "] "+str(Vxs[self.p1].co)+str(Vxs[self.p2].co)+str(Vxs[self.p3].co))               
+     #   print("    Flat end ["+str(self.idx)+ "] "+str(Vxs[self.p1].co)+str(Vxs[self.p2].co)+str(Vxs[self.p3].co))               
         # debug("    L1: old="+str(self.l1)+" new=" +str((Vxs[self.p1].co - Vxs[self.p3].co).length))
         # debug("    L2: old="+str(self.l2)+" new="+str((Vxs[self.p1].co - Vxs[self.p2].co).length))
         # debug("    L3: old="+str(self.l3)+" new="+str((Vxs[self.p2].co - Vxs[self.p3].co).length))
@@ -227,7 +229,7 @@ class MyPoly:
         if a in [1, 3] and b in [1, 3]:
             return self.l1
  
-    def setToFlat(self,a,b,flatted):
+    def NEWsetToFlat(self,a,b,flatted):
         xa = self.x(a)
         ya = self.y(a)
         xb = self.x(b)
@@ -237,13 +239,13 @@ class MyPoly:
         d = self.edgeLength(a, b)
         ra = self.edgeLength(a,flatted)
         rb = self.edgeLength(b,flatted)
-        #print("          d=%2.2f ra=%2.2f rb=%2.2f"%(d,ra,rb))
+        print("          d=%2.2f ra=%2.2f rb=%2.2f"%(d,ra,rb))
         k = 0.25*math.sqrt((((ra+rb)*(ra+rb)-(d*d))*(d*d-(ra-rb)*(ra-rb))))
         x1 = 0.5*(xb+xa)+0.5*(xb-xa)*(ra*ra - rb*rb)/(d*d) + 2*(yb-ya)*k/(d*d)
         x2 = 0.5*(xb+xa)+0.5*(xb-xa)*(ra*ra - rb*rb)/(d*d) - 2*(yb-ya)*k/(d*d)
         y1 = 0.5*(yb+ya)+0.5*(yb-ya)*(ra*ra - rb*rb)/(d*d) - 2*(xb-xa)*k/(d*d)
         y2 = 0.5*(yb+ya)+0.5*(yb-ya)*(ra*ra - rb*rb)/(d*d) + 2*(xb-xa)*k/(d*d)
-        #print("          x1=%2.2f y1=%2.2f x2=%2.2f y2=%2.2f"%(x1,y1,x2,y2))
+        print("          x1=%2.2f y1=%2.2f x2=%2.2f y2=%2.2f"%(x1,y1,x2,y2))
 
         va = Vector([xa,ya])
         vb = Vector([xb,yb])
@@ -255,15 +257,17 @@ class MyPoly:
             self.setx(flatted,x2)
             self.sety(flatted,y2)  
         
-        print("  p1-p3 diff %2.2f perc %2.2f"%(self.l1- (Vxs[self.p1].co - Vxs[self.p3].co).length,
-                                               (self.l1- (Vxs[self.p1].co - Vxs[self.p3].co).length)/self.l1),end='')
-        print("  p1-p2 diff %2.2f perc %2.2f"%(self.l2 - (Vxs[self.p1].co - Vxs[self.p2].co).length,
-                                               (self.l2 - (Vxs[self.p1].co - Vxs[self.p2].co).length)/self.l2),end='')
-        print("  p2-p3 diff %2.2f perc %2.2f"%(self.l3 - (Vxs[self.p2].co - Vxs[self.p3].co).length,
-                                               (self.l3 - (Vxs[self.p2].co - Vxs[self.p3].co).length)/self.l3))
-              
+        #=======================================================================
+        # print("  p1-p3 diff %2.2f perc %2.2f"%(self.l1- (Vxs[self.p1].co - Vxs[self.p3].co).length,
+        #                                        (self.l1- (Vxs[self.p1].co - Vxs[self.p3].co).length)/self.l1),end='')
+        # print("  p1-p2 diff %2.2f perc %2.2f"%(self.l2 - (Vxs[self.p1].co - Vxs[self.p2].co).length,
+        #                                        (self.l2 - (Vxs[self.p1].co - Vxs[self.p2].co).length)/self.l2),end='')
+        # print("  p2-p3 diff %2.2f perc %2.2f"%(self.l3 - (Vxs[self.p2].co - Vxs[self.p3].co).length,
+        #                                        (self.l3 - (Vxs[self.p2].co - Vxs[self.p3].co).length)/self.l3))
+        #       
+        #=======================================================================
         
-    def OLDsetToFlat(self, master, slave, flatted):
+    def setToFlat(self, master, slave, flatted):
         if self.x(master) > self.x(slave):
             x0 = self.x(slave)
             y0 = self.y(slave)
@@ -358,7 +362,7 @@ class Flattener(bpy.types.Operator):
     def minimizeEnergy(self, F, maxDeformation, deltaDeformation):
         global Vxs
         
-        #  print("Energy minimizer")
+      #  print("Energy minimizer ", maxDeformation)
         MAXCOUNT = 5000
         dx = deltaDeformation
         dy = deltaDeformation
@@ -366,7 +370,7 @@ class Flattener(bpy.types.Operator):
         for count in range(MAXCOUNT):
             nodesMovToGain = [0 for x in range(len(Vxs))]            
             for vix in range(len(Vxs)): 
-                # get the triangles with the vertex in common
+                # get the triangles with the vertex vix in common
                 C = []
                 energy = 0
                 for p in F:
@@ -382,6 +386,7 @@ class Flattener(bpy.types.Operator):
                         vandl.append(l[1])
                 #vandl contains the list of points and original length 
                 #of the verctices not vix
+                # energy accumulate the difference of energy
                 for v in vandl: 
                     dl = (Vxs[v[0]].co - Vxs[vix].co).length - v[1]
                     #dl = difference between original length and new length
@@ -412,7 +417,7 @@ class Flattener(bpy.types.Operator):
                     dl = (Vxs[v[0]].co - Vxs[vix].co).length - v[1]
                     overallmdy = overallmdy + dl*dl / v[1]
                 Vxs[vix].co = originalCo
-    
+                # the overallxxx are the energy with a small change in length
                 if energy > min(overallpdx, overallmdx, overallpdy, overallmdy):
                     if overallpdx == min(overallpdx, overallmdx, overallpdy, overallmdy):
                         nodesMovToGain[vix] = [dx,0,energy - overallpdx]
@@ -427,15 +432,17 @@ class Flattener(bpy.types.Operator):
             
             maxGain = maxDeformation
             maxIdx = None
+            #search of the node with the max gain in term of energy
             for n in range(len(nodesMovToGain)):
                 if nodesMovToGain[n][2] > maxGain:
                     maxGain = nodesMovToGain[n][2]
                     maxIdx = n
             if maxIdx:
-              #  print("%d) Max reduction for node %d, Denergy %.6f coord %2.4f %2.4f"%(count,maxIdx,nodesMovToGain[maxIdx][2],Vxs[maxIdx].co.x,Vxs[maxIdx].co.y))
+                print("%d) Max reduction for node %d, Denergy %.6f coord %2.4f %2.4f"%(count,maxIdx,nodesMovToGain[maxIdx][2],Vxs[maxIdx].co.x,Vxs[maxIdx].co.y))
                 Vxs[maxIdx].co.x += nodesMovToGain[maxIdx][0]
                 Vxs[maxIdx].co.y += nodesMovToGain[maxIdx][1]
             else:
+                print("No more gain, residual energy:", energy)
                 break
           
     def makeItFlat(self, obj, energyMinimizer, maxDeformation, deltaDeformation):
@@ -459,7 +466,7 @@ class Flattener(bpy.types.Operator):
         me = obj.data
         Vxs = me.vertices[:]
         
-        pydevd.settrace(stdoutToServer=True, stderrToServer=True, suspend=True)
+#        pydevd.settrace(stdoutToServer=True, stderrToServer=True, suspend=True)
         s = None
         for p in me.polygons:
             if p.select:
@@ -505,40 +512,40 @@ class Flattener(bpy.types.Operator):
             
         self.makeItFlat(bpy.context.active_object, sce.airflow_model.energyMinimizer, sce.airflow_model.maxDeformation, sce.airflow_model.deltaDeformation)
         # Complet list of vertices used
-        #=======================================================================
-        # vIdxList = []
-        # faces = []
-        # vertices = []
-        # for p in F:
-        #     vIdxList.append(p.p1)
-        #     vIdxList.append(p.p2)
-        #     vIdxList.append(p.p3)
-        # vIdxList.sort()
-        # # The following remove duplicates
-        # vIdxList = list(set(vIdxList))
-        # for p in F:
-        #     p.p1 = vIdxList.index(p.p1)
-        #     p.p2 = vIdxList.index(p.p2)
-        #     p.p3 = vIdxList.index(p.p3)
-        #     faces.append([p.p1, p.p2, p.p3])
-        # for vidx in vIdxList:
-        #     vertices.append([Vxs[vidx].co.x, Vxs[vidx].co.y, Vxs[vidx].co.z])
-        #=======================================================================
-
-# ============================================================        
+        vIdxList = []
         faces = []
         vertices = []
-        count = 0
-        idx=0
-        while F:
-            for p in F:
-                faces.append([p.p1, p.p2, p.p3])
-                idx = idx + 1
-                F.remove(p)
-        for v in Vxs:
-            vertices.append([v.co.x, v.co.y, v.co.z])
+        for p in F:
+            vIdxList.append(p.p1)
+            vIdxList.append(p.p2)
+            vIdxList.append(p.p3)
+        vIdxList.sort()
+        # The following remove duplicates
+        vIdxList = list(set(vIdxList))
+        for p in F:
+            p.p1 = vIdxList.index(p.p1)
+            p.p2 = vIdxList.index(p.p2)
+            p.p3 = vIdxList.index(p.p3)
+            faces.append([p.p1, p.p2, p.p3])
+        for vidx in vIdxList:
+            vertices.append([Vxs[vidx].co.x, Vxs[vidx].co.y, Vxs[vidx].co.z])
 
-# =========================================================
+#===============================================================================
+# # ============================================================        
+#         faces = []
+#         vertices = []
+#         count = 0
+#         idx=0
+#         while F:
+#             for p in F:
+#                 faces.append([p.p1, p.p2, p.p3])
+#                 idx = idx + 1
+#                 F.remove(p)
+#         for v in Vxs:
+#             vertices.append([v.co.x, v.co.y, v.co.z])
+# 
+# # =========================================================
+#===============================================================================
 
         fmesh = bpy.data.meshes.new("panel")
         fmesh.from_pydata(vertices, [], faces)
@@ -770,7 +777,7 @@ class AirProfile(bpy.types.Operator):
                         x2 = self.getXinEdge(a.data.vertices, e2, v.co.y)
                         leftx = min(x1, x2)
                         rightx = max(x1, x2)
-                        x = (v.co.x - leftx) / (rightx - leftx)
+                        x = (v.co.x - leftx) / (rightx - leftx+0.0001)
                         y = profile(x, mp, pp)
                         if weightMode:
                             if a.data.vertices[v.index].groups:
@@ -1063,8 +1070,8 @@ class AirFoilSettings(bpy.types.PropertyGroup):
     twist = BoolProperty(name="Apply Twist",default=False)
     tw = IntProperty (name="Twist Angle",description="Value of angle", default=0,min=0,max=90)
     energyMinimizer = bpy.props.BoolProperty(name="Stress Relief", default=False)
-    maxDeformation = bpy.props.FloatProperty(name="Max stress", default=0.001, min=0.00001, max=0.1)
-    deltaDeformation = bpy.props.FloatProperty(name="stretch step", default=0.001, min=0.00001, max=0.01)
+    maxDeformation = bpy.props.FloatProperty(name="Min stress reduction", default=0.001, min=0.000001, max=0.1)
+    deltaDeformation = bpy.props.FloatProperty(name="stretch step", default=0.001, min=0.000001, max=0.01)
     paperFormat = bpy.props.StringProperty (name="Paper Size",description="4a0,2a0,a0,a1,a2,a3,a4",default='a0')
     freeText = bpy.props.StringProperty (name="Free Text", description="Anything appearing in the PDF",default='free text')
     
