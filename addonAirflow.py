@@ -364,86 +364,87 @@ class Flattener(bpy.types.Operator):
         
       #  print("Energy minimizer ", maxDeformation)
         MAXCOUNT = 5000
-        dx = deltaDeformation
-        dy = deltaDeformation
-#        print("Start minimize")
-        for count in range(MAXCOUNT):
-            nodesMovToGain = [0 for x in range(len(Vxs))]            
-            for vix in range(len(Vxs)): 
-                # get the triangles with the vertex vix in common
-                C = []
-                energy = 0
-                for p in F:
-                    if vix in p.vertices:
-                        C.append(p)
-                # C now contains the list of polys with the vertix index vix
-                vandl = []
-                for c in C:
-                    l = c.adjacentVx(vix)
-                    if not l[0] in vandl:
-                        vandl.append(l[0])
-                    if not l[1] in vandl:
-                        vandl.append(l[1])
-                #vandl contains the list of points and original length 
-                #of the verctices not vix
-                # energy accumulate the difference of energy
-                for v in vandl: 
-                    dl = (Vxs[v[0]].co - Vxs[vix].co).length - v[1]
-                    #dl = difference between original length and new length
-                    energy = energy + dl*dl/ v[1]
-                originalCo = Vxs[vix].co
-                overallpdx = 0.0
-                overallmdx = 0.0
-                overallpdy = 0.0
-                overallmdy = 0.0
-                Vxs[vix].co.x = originalCo.x + dx
-                for v in vandl:
-                    dl = (Vxs[v[0]].co - Vxs[vix].co).length - v[1]
-                    overallpdx = overallpdx + dl* dl / v[1]
-                    # move the vertix by a -dx and calculate the overallmdx
-                Vxs[vix].co.x = originalCo.x - dx
-                for v in vandl:
-                    dl = (Vxs[v[0]].co - Vxs[vix].co).length - v[1]
-                    overallmdx = overallmdx + dl* dl / v[1]
-                    # move the vertix by a +dy and calculate the overallpdy
-                Vxs[vix].co.x = originalCo.x
-                Vxs[vix].co.y = originalCo.y + dy
-                for v in vandl:
-                    dl = (Vxs[v[0]].co - Vxs[vix].co).length - v[1]
-                    overallpdy = overallpdy + dl*dl / v[1]
-                    # move the vertix by a -dy and calculate the overallpdx
-                Vxs[vix].co.y = originalCo.y - dy
-                for v in vandl:
-                    dl = (Vxs[v[0]].co - Vxs[vix].co).length - v[1]
-                    overallmdy = overallmdy + dl*dl / v[1]
-                Vxs[vix].co = originalCo
-                # the overallxxx are the energy with a small change in length
-                if energy > min(overallpdx, overallmdx, overallpdy, overallmdy):
-                    if overallpdx == min(overallpdx, overallmdx, overallpdy, overallmdy):
-                        nodesMovToGain[vix] = [dx,0,energy - overallpdx]
-                    elif overallmdx == min(overallpdx, overallmdx, overallpdy, overallmdy):
-                        nodesMovToGain[vix] = [-dx,0,energy - overallmdx]
-                    elif overallpdy == min(overallpdx, overallmdx, overallpdy, overallmdy):
-                        nodesMovToGain[vix] = [0,dy,energy - overallpdy]
+        delta = 0.1
+        while delta > 10**-deltaDeformation:
+            print("---------------> Loop minimize delta=",delta)
+            for count in range(MAXCOUNT):
+                nodesMovToGain = [0 for x in range(len(Vxs))]            
+                for vix in range(len(Vxs)): 
+                    # get the triangles with the vertex vix in common
+                    C = []
+                    energy = 0
+                    for p in F:
+                        if vix in p.vertices:
+                            C.append(p)
+                    # C now contains the list of polys with the vertix index vix
+                    vandl = []
+                    for c in C:
+                        l = c.adjacentVx(vix)
+                        if not l[0] in vandl:
+                            vandl.append(l[0])
+                        if not l[1] in vandl:
+                            vandl.append(l[1])
+                    #vandl contains the list of points and original length 
+                    #of the verctices not vix
+                    # energy accumulate the difference of energy
+                    for v in vandl: 
+                        dl = (Vxs[v[0]].co - Vxs[vix].co).length - v[1]
+                        #dl = difference between original length and new length
+                        energy = energy + dl*dl/ v[1]
+                    originalCo = Vxs[vix].co
+                    overallpdx = 0.0
+                    overallmdx = 0.0
+                    overallpdy = 0.0
+                    overallmdy = 0.0
+                    Vxs[vix].co.x = originalCo.x + delta
+                    for v in vandl:
+                        dl = (Vxs[v[0]].co - Vxs[vix].co).length - v[1]
+                        overallpdx = overallpdx + dl* dl / v[1]
+                        # move the vertix by a -dx and calculate the overallmdx
+                    Vxs[vix].co.x = originalCo.x - delta
+                    for v in vandl:
+                        dl = (Vxs[v[0]].co - Vxs[vix].co).length - v[1]
+                        overallmdx = overallmdx + dl* dl / v[1]
+                        # move the vertix by a +dy and calculate the overallpdy
+                    Vxs[vix].co.x = originalCo.x
+                    Vxs[vix].co.y = originalCo.y + delta
+                    for v in vandl:
+                        dl = (Vxs[v[0]].co - Vxs[vix].co).length - v[1]
+                        overallpdy = overallpdy + dl*dl / v[1]
+                        # move the vertix by a -dy and calculate the overallpdx
+                    Vxs[vix].co.y = originalCo.y - delta
+                    for v in vandl:
+                        dl = (Vxs[v[0]].co - Vxs[vix].co).length - v[1]
+                        overallmdy = overallmdy + dl*dl / v[1]
+                    Vxs[vix].co = originalCo
+                    # the overallxxx are the energy with a small change in length
+                    if energy > min(overallpdx, overallmdx, overallpdy, overallmdy):
+                        if overallpdx == min(overallpdx, overallmdx, overallpdy, overallmdy):
+                            nodesMovToGain[vix] = [delta,0,energy - overallpdx]
+                        elif overallmdx == min(overallpdx, overallmdx, overallpdy, overallmdy):
+                            nodesMovToGain[vix] = [-delta,0,energy - overallmdx]
+                        elif overallpdy == min(overallpdx, overallmdx, overallpdy, overallmdy):
+                            nodesMovToGain[vix] = [0,delta,energy - overallpdy]
+                        else:
+                            nodesMovToGain[vix] = [0,-delta,energy - overallmdy]
                     else:
-                        nodesMovToGain[vix] = [0,-dy,energy - overallmdy]
+                            nodesMovToGain[vix] = [0,0,0.0]
+                
+                maxGain = maxDeformation
+                maxIdx = None
+                #search of the node with the max gain in term of energy
+                for n in range(len(nodesMovToGain)):
+                    if nodesMovToGain[n][2] > maxGain:
+                        maxGain = nodesMovToGain[n][2]
+                        maxIdx = n
+                if maxIdx:
+#                    print("%d) Max reduction for node %d, Denergy %.6f coord %2.4f %2.4f"%(count,maxIdx,nodesMovToGain[maxIdx][2],Vxs[maxIdx].co.x,Vxs[maxIdx].co.y))
+                    Vxs[maxIdx].co.x += nodesMovToGain[maxIdx][0]
+                    Vxs[maxIdx].co.y += nodesMovToGain[maxIdx][1]
                 else:
-                        nodesMovToGain[vix] = [0,0,0.0]
-            
-            maxGain = maxDeformation
-            maxIdx = None
-            #search of the node with the max gain in term of energy
-            for n in range(len(nodesMovToGain)):
-                if nodesMovToGain[n][2] > maxGain:
-                    maxGain = nodesMovToGain[n][2]
-                    maxIdx = n
-            if maxIdx:
-                print("%d) Max reduction for node %d, Denergy %.6f coord %2.4f %2.4f"%(count,maxIdx,nodesMovToGain[maxIdx][2],Vxs[maxIdx].co.x,Vxs[maxIdx].co.y))
-                Vxs[maxIdx].co.x += nodesMovToGain[maxIdx][0]
-                Vxs[maxIdx].co.y += nodesMovToGain[maxIdx][1]
-            else:
-                print("No more gain, residual energy:", energy)
-                break
+#                    print("No more gain, residual energy:", energy)
+                    break
+            delta = delta / 10
           
     def makeItFlat(self, obj, energyMinimizer, maxDeformation, deltaDeformation):
         # Variables
@@ -746,7 +747,7 @@ class AirProfile(bpy.types.Operator):
                     if e1[0] != -1 and e2[0] != -1:
                         x1 = self.getXinEdge(a.data.vertices, e1, v.co.y)
                         x2 = self.getXinEdge(a.data.vertices, e2, v.co.y)
-                        print("X1 %2.2f  X2 %2.2f\n"%(x1,x2))
+                       # print("X1 %2.2f  X2 %2.2f\n"%(x1,x2))
                         leftx = min(x1, x2)
                         angle = ((v.co.y - miny) / (maxy - miny) * maxTwist) / 180 * 3.14159
                         a.data.vertices[v.index].co.z += sin(angle) * (v.co.x - leftx)
@@ -1071,7 +1072,7 @@ class AirFoilSettings(bpy.types.PropertyGroup):
     tw = IntProperty (name="Twist Angle",description="Value of angle", default=0,min=0,max=90)
     energyMinimizer = bpy.props.BoolProperty(name="Stress Relief", default=False)
     maxDeformation = bpy.props.FloatProperty(name="Min stress reduction", default=0.001, min=0.000001, max=0.1)
-    deltaDeformation = bpy.props.FloatProperty(name="stretch step", default=0.001, min=0.000001, max=0.01)
+    deltaDeformation = bpy.props.IntProperty(name="accuracy", default=3, min=1, max=10)
     paperFormat = bpy.props.StringProperty (name="Paper Size",description="4a0,2a0,a0,a1,a2,a3,a4",default='a0')
     freeText = bpy.props.StringProperty (name="Free Text", description="Anything appearing in the PDF",default='free text')
     
