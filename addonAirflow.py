@@ -2,7 +2,7 @@ bl_info = {
     "name": "Create Sailprofile",
     "description": "Creates a profile for a sail",
     "author": "Luca Stagnaro",
-    "version": (0, 1, 0),
+    "version": (0, 2, 0),
     "blender": (2, 6, 9),
     "api": 33411,  # Not certain on the API version
     "location": "View3D > Add > Mesh > Airfoil",
