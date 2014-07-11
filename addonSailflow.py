@@ -511,7 +511,7 @@ class Flattener(bpy.types.Operator):
         if F:
             del F[:]
             
-        self.makeItFlat(bpy.context.active_object, sce.airflow_model.energyMinimizer, sce.airflow_model.maxDeformation, sce.airflow_model.deltaDeformation)
+        self.makeItFlat(bpy.context.active_object, sce.sailflow_model.energyMinimizer, sce.sailflow_model.maxDeformation, sce.sailflow_model.deltaDeformation)
         # Complet list of vertices used
         vIdxList = []
         faces = []
@@ -563,16 +563,16 @@ class VIEW3D_PT_airprofile_print(bpy.types.Panel):
     bl_label = "PDF Generation"
     bl_space_type = "VIEW_3D"
     bl_region_type = "TOOLS"
-    bl_category = "Airflow Design"
+    bl_category = "Sailflow Design"
     
     def draw(self, context):
         sce = bpy.context.scene
         layout = self.layout
         col = layout.column(align=True)
 
-        col.prop(sce.airflow_model, "paperFormat")
-        col.prop(sce.airflow_model, "freeText")
-        col.prop(sce.airflow_model, "multiPages")
+        col.prop(sce.sailflow_model, "paperFormat")
+        col.prop(sce.sailflow_model, "freeText")
+        col.prop(sce.sailflow_model, "multiPages")
         
         col = layout.column(align=True)
         col.operator("mesh.print_pdf")
@@ -581,60 +581,60 @@ class VIEW3D_PT_airprofile_parameters(bpy.types.Panel):
     bl_label = "Parameters"
     bl_space_type = "VIEW_3D"
     bl_region_type = "TOOLS"
-    bl_category = "Airflow Design"
+    bl_category = "Sailflow Design"
     
     def draw(self, context):
         sce = bpy.context.scene
         layout = self.layout
         col = layout.column(align=True)
 
-        if sce.airflow_model.t == 'NACA':
-            col.prop(sce.airflow_model, "m")
-            col.prop(sce.airflow_model, "p")
+        if sce.sailflow_model.t == 'NACA':
+            col.prop(sce.sailflow_model, "m")
+            col.prop(sce.sailflow_model, "p")
              
-        elif sce.airflow_model.t == "THREE":
+        elif sce.sailflow_model.t == "THREE":
             col = layout.column(align=True)
             col.label(text="Section 1:")
-            col.prop(sce.airflow_model, "sec1M")
-            col.prop(sce.airflow_model, "sec1P")
+            col.prop(sce.sailflow_model, "sec1M")
+            col.prop(sce.sailflow_model, "sec1P")
 
             col = layout.column(align=True)
             col.label(text="Section 2:")
-            col.prop(sce.airflow_model, "sec2M")
-            col.prop(sce.airflow_model, "sec2P")
-            col.prop(sce.airflow_model, "sec2H")
+            col.prop(sce.sailflow_model, "sec2M")
+            col.prop(sce.sailflow_model, "sec2P")
+            col.prop(sce.sailflow_model, "sec2H")
 
             col = layout.column(align=True)            
             col.label(text="Section 3:")
-            col.prop(sce.airflow_model, "sec3M")
-            col.prop(sce.airflow_model, "sec3P")
+            col.prop(sce.sailflow_model, "sec3M")
+            col.prop(sce.sailflow_model, "sec3P")
             
-        elif sce.airflow_model.t == "CUSTOM":
+        elif sce.sailflow_model.t == "CUSTOM":
             col.operator("mesh.load_library")
             
         col = layout.column(align=True)
-        col.prop(sce.airflow_model, "t")
-        col.prop(sce.airflow_model, "weight")
+        col.prop(sce.sailflow_model, "t")
+        col.prop(sce.sailflow_model, "weight")
         
         col = layout.column(align=True)
         col.label(text="Twist:")
         row = col.row(align=True)
-        row.prop(sce.airflow_model, "twist")
-        row.prop(sce.airflow_model, "tw")
+        row.prop(sce.sailflow_model, "twist")
+        row.prop(sce.sailflow_model, "tw")
 
         col = layout.column(align=True)    
         col.label(text="Operators:")
         col.operator("mesh.airprof")
-        col.prop(sce.airflow_model,"energyMinimizer")
-        col.prop(sce.airflow_model,"deltaDeformation")
-        col.prop(sce.airflow_model,"maxDeformation") 
+        col.prop(sce.sailflow_model,"energyMinimizer")
+        col.prop(sce.sailflow_model,"deltaDeformation")
+        col.prop(sce.sailflow_model,"maxDeformation") 
         col = layout.column(align=True)    
         col.operator("mesh.flattener")
             
-        if sce.airflow_model.t == 'NACA':
+        if sce.sailflow_model.t == 'NACA':
             box = layout.box()
-            angleIn = atan(2 * sce.airflow_model.m / sce.airflow_model.p) * 180 / 3.14159
-            angleOut = -atan(2 * sce.airflow_model.m / 100 / (sce.airflow_model.p / 100 - 1)) * 180 / 3.14159
+            angleIn = atan(2 * sce.sailflow_model.m / sce.sailflow_model.p) * 180 / 3.14159
+            angleOut = -atan(2 * sce.sailflow_model.m / 100 / (sce.sailflow_model.p / 100 - 1)) * 180 / 3.14159
             box.label(text="Angle in  " + str(round(angleIn, 2)))
             box.label(text="Angle out " + str(round(angleOut, 2)))
 
@@ -798,9 +798,9 @@ class AirProfile(bpy.types.Operator):
                     miny = v.co.y
                 if v.co.y > maxy:
                     maxy = v.co.y 
-            mp = [sce.airflow_model.sec1M/100.0,sce.airflow_model.sec2M/100.0,sce.airflow_model.sec3M/100.0] 
-            pp = [sce.airflow_model.sec1P/100.0,sce.airflow_model.sec2P/100.0,sce.airflow_model.sec3P/100.0]
-            heights = [0.0, sce.airflow_model.sec2H/100.0, 1.0]  # Percentage, first and last 0 and 1
+            mp = [sce.sailflow_model.sec1M/100.0,sce.sailflow_model.sec2M/100.0,sce.sailflow_model.sec3M/100.0] 
+            pp = [sce.sailflow_model.sec1P/100.0,sce.sailflow_model.sec2P/100.0,sce.sailflow_model.sec3P/100.0]
+            heights = [0.0, sce.sailflow_model.sec2H/100.0, 1.0]  # Percentage, first and last 0 and 1
             for v in a.data.vertices:
     #            if not v.index in pv:
     #            if True:
@@ -849,9 +849,9 @@ class AirProfile(bpy.types.Operator):
     def execute(self, context):
         print("Called airprofile")    
         sce = bpy.context.scene    
-        self.camber(context, sce.airflow_model.m / 100, sce.airflow_model.p / 100, sce.airflow_model.weight, sce.airflow_model.curve, sce.airflow_model.t)
-        if sce.airflow_model.twist:
-            self.makeTwist(context.active_object, sce.airflow_model.tw)
+        self.camber(context, sce.sailflow_model.m / 100, sce.sailflow_model.p / 100, sce.sailflow_model.weight, sce.sailflow_model.curve, sce.sailflow_model.t)
+        if sce.sailflow_model.twist:
+            self.makeTwist(context.active_object, sce.sailflow_model.tw)
         return {'FINISHED'}
         
     @classmethod
@@ -1033,7 +1033,7 @@ class printPDF(bpy.types.Operator):
             for e in p.edge_keys:
                 el.append((e[1], e[0]))
         vxs = a.data.vertices
-        self.makePDF(a, el, vxs, sce.airflow_model.paperFormat, sce.airflow_model.freeText,sce.airflow_model.multiPages);  
+        self.makePDF(a, el, vxs, sce.sailflow_model.paperFormat, sce.sailflow_model.freeText,sce.sailflow_model.multiPages);  
         return {'FINISHED'}
     
     def invoke(self, context,event):
@@ -1098,7 +1098,7 @@ class AirFoilSettings(bpy.types.PropertyGroup):
                                     
 def register():
     bpy.utils.register_module(__name__)
-    bpy.types.Scene.airflow_model = bpy.props.PointerProperty(type=AirFoilSettings,
+    bpy.types.Scene.sailflow_model = bpy.props.PointerProperty(type=AirFoilSettings,
                                         name="Airfoil Model",
                                         description="Setting of the AirFoil",
                                         options={'SKIP_SAVE'})
