@@ -9,26 +9,26 @@ bl_info = {
     "warning": "",
     "category": "Add Mesh"}
 
-import bpy
-import sys
-import mathutils
-import math
-
-from math import *
-from mathutils import Vector, Euler,geometry
-  
-from bpy.types import Operator
-from bpy.props import IntProperty, EnumProperty, BoolProperty, StringProperty
-
-from fpdf import FPDF
-import time
 import imp
+from math import *
+import math
+import sys
+import time
+
+import bpy
+
+from bpy.props import IntProperty, EnumProperty, BoolProperty, StringProperty
+from bpy.types import Operator
+from fpdf import FPDF
+from mathutils import Vector, Euler, geometry
+import mathutils
+import pydevd
+
 
 PYDEV_SOURCE_DIR = 'C:/eclipse/plugins/org.python.pydev_3.4.1.201403181715/pysrc'
   
 if sys.path.count(PYDEV_SOURCE_DIR) < 1:
    sys.path.append(PYDEV_SOURCE_DIR)
-import pydevd
   
 
 custom_profile = None   
@@ -841,7 +841,7 @@ class AirProfile(bpy.types.Operator):
                         rightx = max(x1, x2)
                         x = (v.co.x - leftx) / (rightx - leftx+0.0001)
                         heightPerc = (v.co.y - miny) / (maxy - miny)
-                        y = custom_profile.profile(x, heightPerc)
+                        y = custom_profile.profile(x, heightPerc,v.co.x,v.co.y)
                         a.data.vertices[v.index].co.z = y * (rightx - leftx)
             
             
