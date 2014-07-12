@@ -2,7 +2,7 @@ bl_info = {
     "name": "Create Sailprofile",
     "description": "Creates a profile for a sail",
     "author": "blueluca",
-    "version": (0, 2, 0),
+    "version": (0, 2, 1),
     "blender": (2, 6, 9),
     "api": 33411,  # Not certain on the API version
     "location": "View3D > Add > Mesh > Airfoil",
@@ -22,13 +22,13 @@ from bpy.types import Operator
 from fpdf import FPDF
 from mathutils import Vector, Euler, geometry
 import mathutils
-import pydevd
+#import pydevd
 
 
-PYDEV_SOURCE_DIR = 'C:/eclipse/plugins/org.python.pydev_3.4.1.201403181715/pysrc'
+#PYDEV_SOURCE_DIR = 'C:/eclipse/plugins/org.python.pydev_3.4.1.201403181715/pysrc'
   
-if sys.path.count(PYDEV_SOURCE_DIR) < 1:
-   sys.path.append(PYDEV_SOURCE_DIR)
+#if sys.path.count(PYDEV_SOURCE_DIR) < 1:
+#   sys.path.append(PYDEV_SOURCE_DIR)
   
 
 custom_profile = None   
@@ -578,7 +578,7 @@ class VIEW3D_PT_airprofile_print(bpy.types.Panel):
         col.operator("mesh.print_pdf")
         
 class VIEW3D_PT_airprofile_parameters(bpy.types.Panel):
-    bl_label = "Parameters"
+    bl_label = "Profile Parameters"
     bl_space_type = "VIEW_3D"
     bl_region_type = "TOOLS"
     bl_category = "Sailflow Design"
@@ -587,49 +587,45 @@ class VIEW3D_PT_airprofile_parameters(bpy.types.Panel):
         sce = bpy.context.scene
         layout = self.layout
         col = layout.column(align=True)
+        col.prop(sce.sailflow_model, "t")
 
         if sce.sailflow_model.t == 'NACA':
+            col = layout.column(align=True)
             col.prop(sce.sailflow_model, "m")
             col.prop(sce.sailflow_model, "p")
              
         elif sce.sailflow_model.t == "THREE":
             col = layout.column(align=True)
-            col.label(text="Section 1:")
-            col.prop(sce.sailflow_model, "sec1M")
-            col.prop(sce.sailflow_model, "sec1P")
-
+            col.label(text="High Section:")
+            col.prop(sce.sailflow_model, "sec3M")
+            col.prop(sce.sailflow_model, "sec3P")
+            
             col = layout.column(align=True)
-            col.label(text="Section 2:")
+            col.label(text="Middle Section:")
             col.prop(sce.sailflow_model, "sec2M")
             col.prop(sce.sailflow_model, "sec2P")
             col.prop(sce.sailflow_model, "sec2H")
 
             col = layout.column(align=True)            
-            col.label(text="Section 3:")
-            col.prop(sce.sailflow_model, "sec3M")
-            col.prop(sce.sailflow_model, "sec3P")
+            col.label(text="Low Section:")
+            col.prop(sce.sailflow_model, "sec1M")
+            col.prop(sce.sailflow_model, "sec1P")
             
         elif sce.sailflow_model.t == "CUSTOM":
             col.operator("mesh.load_library")
             
         col = layout.column(align=True)
-        col.prop(sce.sailflow_model, "t")
         col.prop(sce.sailflow_model, "weight")
         
-        col = layout.column(align=True)
-        col.label(text="Twist:")
+#        col = layout.column(align=True)
+#        col.label(text="Twist:")
         row = col.row(align=True)
         row.prop(sce.sailflow_model, "twist")
         row.prop(sce.sailflow_model, "tw")
-
-        col = layout.column(align=True)    
-        col.label(text="Operators:")
+# 
+#       col = layout.column(align=True)    
+        col.label(text="Operation:")
         col.operator("mesh.airprof")
-        col.prop(sce.sailflow_model,"energyMinimizer")
-        col.prop(sce.sailflow_model,"deltaDeformation")
-        col.prop(sce.sailflow_model,"maxDeformation") 
-        col = layout.column(align=True)    
-        col.operator("mesh.flattener")
             
         if sce.sailflow_model.t == 'NACA':
             box = layout.box()
@@ -638,6 +634,23 @@ class VIEW3D_PT_airprofile_parameters(bpy.types.Panel):
             box.label(text="Angle in  " + str(round(angleIn, 2)))
             box.label(text="Angle out " + str(round(angleOut, 2)))
 
+class VIEW3D_PT_flattener_parameters(bpy.types.Panel):
+    bl_label = "Flattener Parameters"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "TOOLS"
+    bl_category = "Sailflow Design"
+    
+    def draw(self, context):
+        sce = bpy.context.scene
+        layout = self.layout
+        col = layout.column(align=True)    
+
+        col.prop(sce.sailflow_model,"energyMinimizer")
+        col.prop(sce.sailflow_model,"deltaDeformation")
+        col.prop(sce.sailflow_model,"maxDeformation") 
+        col = layout.column(align=True)    
+        col.operator("mesh.flattener")
+        
 class LibraryLoader(bpy.types.Operator):
     bl_idname = "mesh.load_library"
     bl_label = "Load profiler"
@@ -687,32 +700,42 @@ class AirProfile(bpy.types.Operator):
         x2 = vl[e[1]].co.x
         y1 = vl[e[0]].co.y
         y2 = vl[e[1]].co.y
-    #    x,y = lineIntersection2D(x1,y1,x2,y2,-10,yc,+10,yc) 
-        v = mathutils.geometry.intersect_line_line_2d(Vector((x1, y1, 0)),
+        if (y1 == y2):
+            return(max(x1,x2))
+        else:
+            v = mathutils.geometry.intersect_line_line_2d(Vector((x1, y1, 0)),
                                                       Vector((x2, y2, 0)),
                                                       Vector((-10, yc, 0)),
                                                       Vector((+10, yc, 0)))
-        if v: 
-            return v.x
-        else:
-            return 0.0    
+            if v: 
+                return v.x
+            else:
+                return 0.0    
         
     def getEdgesCrossing(self,vl, pe, y):
+        ce = []
         c1 = (-1, 0)
-        c2 = (0, 0)
+        c2 = (-1, 0)
+        
         for e in pe:
-            if vl[e[0]].co.y >= y and vl[e[1]].co.y <= y:
-                if c1[0] == -1:
-                    c1 = e
-                else:
-                    if not ((c1[0] in e) or (c1[1] in e)):
-                        c2 = e
-            elif vl[e[0]].co.y <= y and vl[e[1]].co.y >= y:
-                if c1[0] == -1:
-                    c1 = e
-                else:
-                    if not ((c1[0] in e) or (c1[1] in e)):
-                        c2 = e
+ #           print("--->Check y=%f e0y=%f e1y=%f"%(y,vl[e[0]].co.y,vl[e[1]].co.y))
+            if (vl[e[0]].co.y >= y and vl[e[1]].co.y <= y) or (vl[e[0]].co.y <= y and vl[e[1]].co.y >= y):
+                ce.append(e)
+ #       print("----> finished check ce len=",len(ce))
+        if len(ce) > 1:
+                minx = 100.0
+                maxx = -100.0
+                for c in ce:
+                    if vl[c[0]].co.x < minx:
+                        minx = vl[c[0]].co.x
+                        c1 = c
+                    if vl[c[0]].co.x > maxx:
+                        maxx = vl[c[0]].co.x
+                        c2 = c
+        else:
+            c1 = (-1, 0)
+            c2 = (-1, 0)
+            
         return (c1, c2)
     
     def extractPerimeterEdges(self,m):     
@@ -747,7 +770,6 @@ class AirProfile(bpy.types.Operator):
                     if e1[0] != -1 and e2[0] != -1:
                         x1 = self.getXinEdge(a.data.vertices, e1, v.co.y)
                         x2 = self.getXinEdge(a.data.vertices, e2, v.co.y)
-                       # print("X1 %2.2f  X2 %2.2f\n"%(x1,x2))
                         leftx = min(x1, x2)
                         angle = ((v.co.y - miny) / (maxy - miny) * maxTwist) / 180 * 3.14159
                         a.data.vertices[v.index].co.z += sin(angle) * (v.co.x - leftx)
@@ -772,7 +794,9 @@ class AirProfile(bpy.types.Operator):
             for v in a.data.vertices:
 #                if not (v.index in pv) or True:
                 if True:
+#                    print("check %d",v.index)
                     e1, e2 = self.getEdgesCrossing(a.data.vertices, pe, v.co.y)
+#                    print("returned ",e1,e2)
                     if e1[0] != -1 and e2[0] != -1:
                         x1 = self.getXinEdge(a.data.vertices, e1, v.co.y)
                         x2 = self.getXinEdge(a.data.vertices, e2, v.co.y)
@@ -811,7 +835,7 @@ class AirProfile(bpy.types.Operator):
                         x2 = self.getXinEdge(a.data.vertices, e2, v.co.y)
                         leftx = min(x1, x2)
                         rightx = max(x1, x2)
-                        x = (v.co.x - leftx) / (rightx - leftx)
+                        x = (v.co.x - leftx) / (rightx - leftx+0.0001)
                         heightPerc = (v.co.y - miny) / (maxy - miny+0.0001)
                         print("HeightPerc=",heightPerc," height")
                         if heightPerc <= heights[1]:
