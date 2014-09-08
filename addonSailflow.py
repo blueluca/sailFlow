@@ -2,8 +2,8 @@ bl_info = {
     "name": "Create Sailprofile",
     "description": "Creates a profile for a sail",
     "author": "blueluca",
-    "version": (0, 2, 1),
-    "blender": (2, 6, 9),
+    "version": (0, 2, 2),
+    "blender": (2, 7, 1),
     "api": 33411,  # Not certain on the API version
     "location": "View3D > Add > Mesh > Airfoil",
     "warning": "",
@@ -14,7 +14,6 @@ from math import *
 import math
 import sys
 import time
-
 import bpy
 
 from bpy.props import IntProperty, EnumProperty, BoolProperty, StringProperty
@@ -442,7 +441,7 @@ class Flattener(bpy.types.Operator):
                     Vxs[maxIdx].co.x += nodesMovToGain[maxIdx][0]
                     Vxs[maxIdx].co.y += nodesMovToGain[maxIdx][1]
                 else:
-#                    print("No more gain, residual energy:", energy)
+                    print("No more gain, residual energy:", energy)
                     break
             delta = delta / 10
           
@@ -613,15 +612,16 @@ class VIEW3D_PT_airprofile_parameters(bpy.types.Panel):
             
         elif sce.sailflow_model.t == "CUSTOM":
             col.operator("mesh.load_library")
+            col = layout.column(align=True)  
             
         col = layout.column(align=True)
         col.prop(sce.sailflow_model, "weight")
         
-#        col = layout.column(align=True)
-#        col.label(text="Twist:")
         row = col.row(align=True)
         row.prop(sce.sailflow_model, "twist")
         row.prop(sce.sailflow_model, "tw")
+        row = col.row(align=True)
+        row.prop(sce.sailflow_model,"ellipDis")
 # 
 #       col = layout.column(align=True)    
         col.label(text="Operation:")
@@ -774,8 +774,8 @@ class AirProfile(bpy.types.Operator):
                         angle = ((v.co.y - miny) / (maxy - miny) * maxTwist) / 180 * 3.14159
                         a.data.vertices[v.index].co.z += sin(angle) * (v.co.x - leftx)
                         a.data.vertices[v.index].co.x = cos(angle) * (v.co.x - leftx) + leftx   
-
-    def camber(self,ctx=None, mp=0.1, pp=0.5, weightMode=False, profileMode=False, ctype="NACA"): 
+    
+    def camber(self,ctx=None, mp=0.1, pp=0.5, weightMode=False, profileMode=False, ctype="NACA",ellipDis=False): 
     
         sce = bpy.context.scene    
         a = ctx.active_object
@@ -790,13 +790,21 @@ class AirProfile(bpy.types.Operator):
             pv.append(e[0])
             pv.append(e[1])
 
+        miny = 100000
+        maxy = -100000
+        for v in a.data.vertices:
+            if v.co.y < miny:
+                miny = v.co.y
+            if v.co.y > maxy:
+                maxy = v.co.y 
+        halfSpan  = (maxy - miny)/2
+        halfSpanY = halfSpan+miny
+        print("Half span = ", halfSpan, "full=",(maxy - miny) )
+        print("miny=",miny," maxy=",maxy)
         if ctype == 'NACA':            
             for v in a.data.vertices:
-#                if not (v.index in pv) or True:
                 if True:
-#                    print("check %d",v.index)
                     e1, e2 = self.getEdgesCrossing(a.data.vertices, pe, v.co.y)
-#                    print("returned ",e1,e2)
                     if e1[0] != -1 and e2[0] != -1:
                         x1 = self.getXinEdge(a.data.vertices, e1, v.co.y)
                         x2 = self.getXinEdge(a.data.vertices, e2, v.co.y)
@@ -806,22 +814,22 @@ class AirProfile(bpy.types.Operator):
                         y = profile(x, mp, pp)
                         if weightMode:
                             if a.data.vertices[v.index].groups:
+                                print("weight=",a.data.vertices[v.index].groups[0].weight)
                                 a.data.vertices[v.index].co.z = a.data.vertices[v.index].groups[0].weight * y * (rightx - leftx)
                             else:    
                                 a.data.vertices[v.index].co.z = y * (rightx - leftx)
                         elif profileMode:
                             weight = self.findWeight(a.matrix_world * v.co)
                             a.data.vertices[v.index].co.z = y * (rightx - leftx) * weight
+                        elif ellipDis:
+                            print("y=",(v.co.y-miny),"x=",x,"camber=",y)
+                            print("factor=",((v.co.y-halfSpanY)/halfSpan)**2)
+                            y = y*sqrt(1-((v.co.y-halfSpanY)/halfSpan)**2)
+                            a.data.vertices[v.index].co.z = y * (rightx - leftx)                            
                         else:
                             a.data.vertices[v.index].co.z = y * (rightx - leftx)
+
         elif ctype == 'THREE':
-            miny = 100000
-            maxy = -100000
-            for v in a.data.vertices:
-                if v.co.y < miny:
-                    miny = v.co.y
-                if v.co.y > maxy:
-                    maxy = v.co.y 
             mp = [sce.sailflow_model.sec1M/100.0,sce.sailflow_model.sec2M/100.0,sce.sailflow_model.sec3M/100.0] 
             pp = [sce.sailflow_model.sec1P/100.0,sce.sailflow_model.sec2P/100.0,sce.sailflow_model.sec3P/100.0]
             heights = [0.0, sce.sailflow_model.sec2H/100.0, 1.0]  # Percentage, first and last 0 and 1
@@ -848,13 +856,6 @@ class AirProfile(bpy.types.Operator):
                         a.data.vertices[v.index].co.z = y * (rightx - leftx) 
         elif ctype == 'CUSTOM':
             print("Custom profile")
-            miny = 100000
-            maxy = -100000
-            for v in a.data.vertices:
-                if v.co.y < miny:
-                    miny = v.co.y
-                if v.co.y > maxy:
-                    maxy = v.co.y 
             for v in a.data.vertices:
                 if not v.index in pv:
                     e1, e2 = self.getEdgesCrossing(a.data.vertices, pe, v.co.y)
@@ -866,14 +867,19 @@ class AirProfile(bpy.types.Operator):
                         x = (v.co.x - leftx) / (rightx - leftx+0.0001)
                         heightPerc = (v.co.y - miny) / (maxy - miny)
                         y = custom_profile.profile(x, heightPerc,v.co.x,v.co.y)
-                        a.data.vertices[v.index].co.z = y * (rightx - leftx)
-            
+                        if ellipDis:
+                            y = y*sqrt(1-((v.co.y-miny)/halfSpan)**2)
+                            a.data.vertices[v.index].co.z = y * (rightx - leftx) * weight                             
+                        else:    
+                            a.data.vertices[v.index].co.z = y * (rightx - leftx)
+                
             
             
     def execute(self, context):
         print("Called airprofile")    
-        sce = bpy.context.scene    
-        self.camber(context, sce.sailflow_model.m / 100, sce.sailflow_model.p / 100, sce.sailflow_model.weight, sce.sailflow_model.curve, sce.sailflow_model.t)
+        sce = bpy.context.scene
+        self.camber(context, sce.sailflow_model.m / 100, sce.sailflow_model.p / 100, sce.sailflow_model.weight, 
+                    sce.sailflow_model.curve, sce.sailflow_model.t,sce.sailflow_model.ellipDis)
         if sce.sailflow_model.twist:
             self.makeTwist(context.active_object, sce.sailflow_model.tw)
         return {'FINISHED'}
@@ -1099,6 +1105,8 @@ class AirFoilSettings(bpy.types.PropertyGroup):
     deltaDeformation = bpy.props.IntProperty(name="accuracy", default=3, min=1, max=10)
     paperFormat = bpy.props.StringProperty (name="Paper Size",description="4a0,2a0,a0,a1,a2,a3,a4",default='a0')
     freeText = bpy.props.StringProperty (name="Free Text", description="Anything appearing in the PDF",default='free text')
+    
+    ellipDis = BoolProperty(name="Eliptic Distribution", default=False)
     
     sec1M = IntProperty(name="Section 1 % Camber percentage",min=0,max=70)
     sec1P = IntProperty(name="Section 1 % Camber position",min=0,max=70)
