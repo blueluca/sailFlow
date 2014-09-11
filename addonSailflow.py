@@ -2,7 +2,7 @@ bl_info = {
     "name": "Create Sailprofile",
     "description": "Creates a profile for a sail",
     "author": "blueluca",
-    "version": (0, 2, 2),
+    "version": (0, 2, 3),
     "blender": (2, 7, 1),
     "api": 33411,  # Not certain on the API version
     "location": "View3D > Add > Mesh > Airfoil",
@@ -314,7 +314,8 @@ class MyPoly:
         global Vxs
         global VxFlat
 
-        if (self.p1 in VxFlat) and (self.p2 in VxFlat) and (self.p3 in VxFlat) : 
+        if (self.p1 in VxFlat) and (self.p2 in VxFlat) and (self.p3 in VxFlat) :
+#            print(self.idx," already flat ") 
             return 0
         elif (((self.p1 not in VxFlat) and (self.p2 not in VxFlat)) or
              ((self.p1 not in VxFlat) and (self.p3 not in VxFlat)) or
@@ -329,7 +330,6 @@ class MyPoly:
                 self.setToFlat(3, 1, 2)
 
         self.zeroZ()
-  
  
     def adjacentVx(self, n):
         if n == self.p1:
@@ -340,12 +340,47 @@ class MyPoly:
             return [[self.p1, self.l1], [self.p2, self.l3]]
         else:
             return None, None
-         
+
+class enerVertex:
+
+    
+    def __init__(self,i):
+        self.idx = i
+        self.adj = []
+        self.energy = 0.0
+#        print("Create enVX ",i)
+        
+    def addAdjacent(self,iandl):
+        if not iandl in self.adj:
+            self.adj.append(iandl)
+#            print("added adj ",iandl)
+        
+    def calcEnergy(self):
+        global Vxs
+        
+        self.energy = 0
+        for v in self.adj: 
+            dl = (Vxs[v[0]].co - Vxs[self.idx].co).length - v[1]
+            self.energy = self.energy + dl*dl/ v[1]
+#            print("...calcEnergy [",self.idx,"-",v[0],"] dl=",dl," en=",self.energy)
+#        print("calcEnery total ", self.energy)
+        return self.energy
+    
+# =================================================================
+#             
+#             
+#             FLATTENER
+# 
+#            
+# ==================================================================            
+    
 class Flattener(bpy.types.Operator):
     bl_idname = "mesh.flattener"
     bl_label = "Flat surface"
     bl_description = "bla bla bla"
-
+    
+    EVs = []
+            
     def findAdjacentNonFlat(self, Polys, p):
         # debug("findAdj of :"+str(p),3)
         for testP in Polys:
@@ -357,8 +392,102 @@ class Flattener(bpy.types.Operator):
             elif (testP.p3 in p.vertices) and (testP.p1 in p.vertices):
                 return testP
         return None
-     
+             
     def minimizeEnergy(self, F, maxDeformation, deltaDeformation):
+        global Vxs
+        count = 0
+        vlist = []
+        
+        print("="*20,"start","="*20)
+        for p in F:
+            vlist = vlist + p.vertices
+        #remove duplicates 
+        vlist = list(set(vlist))
+        # vlist is all the vertices of the flatten area, with no dup.
+        # Build the database of vertices and their connected
+        for v in vlist: 
+            # create a new energy vertix
+            e = enerVertex(v)
+            # get the triangles with the vertex vix in common
+            C = []
+            for p in F:
+                if v in p.vertices:
+                    C.append(p)
+            # C now contains the list of polys with the vertix index vix
+            vandl = []
+            for c in C:
+                # get the other two vertices that belongs to the common poly
+                l = c.adjacentVx(v)
+                # if the first is not yet in the list added
+                e.addAdjacent(l[0])
+                # if the second is not yet in the list added
+                e.addAdjacent(l[1])
+            e.calcEnergy()
+            self.EVs.append(e)
+            count += 1
+#            if count > 80:
+#                return
+        
+        
+        MAXCOUNT = 5000
+        delta = 0.1
+        while delta > 10**-deltaDeformation:
+            print("---------------> NEW Loop minimize delta=",delta)
+            for count in range(MAXCOUNT):
+                maxGain = maxDeformation
+                maxIdx = None
+                nodesMovToGain = [[0,0,0.0] for x in range(len(self.EVs))] 
+                for evIdx in range(len(self.EVs)):
+                    e = self.EVs[evIdx]
+                    origEnergy = e.energy           
+                    originalCo = Vxs[e.idx].co
+                    overallpdx = 0.0    
+                    overallmdx = 0.0
+                    overallpdy = 0.0
+                    overallmdy = 0.0
+                    Vxs[e.idx].co.x = originalCo.x + delta
+                    overallpdx = e.calcEnergy()
+                    Vxs[e.idx].co.x = originalCo.x - delta
+                    overallmdx = e.calcEnergy()
+                    Vxs[e.idx].co.x = originalCo.x
+                    Vxs[e.idx].co.y = originalCo.y + delta
+                    overallpdy = e.calcEnergy() 
+                    Vxs[e.idx].co.y = originalCo.y - delta
+                    overallmdy = e.calcEnergy()
+                    Vxs[e.idx].co = originalCo
+                    e.energy = origEnergy
+                    minEnergy = min(overallpdx, overallmdx, overallpdy, overallmdy)
+                    if origEnergy > minEnergy:
+                        if overallpdx == minEnergy:
+                            nodesMovToGain[evIdx] = [delta,0,origEnergy - overallpdx]
+                        elif overallmdx == minEnergy:
+                            nodesMovToGain[evIdx] = [-delta,0,origEnergy - overallmdx]
+                        elif overallpdy == minEnergy:
+                            nodesMovToGain[evIdx] = [0,delta,origEnergy - overallpdy]
+                        else:
+                            nodesMovToGain[evIdx] = [0,-delta,origEnergy - overallmdy]
+                        if nodesMovToGain[evIdx][2] > maxGain:
+#                            print("Better node idx,x,y,DeltaE ",e.idx,nodesMovToGain[evIdx][0],nodesMovToGain[evIdx][1],nodesMovToGain[evIdx][2])
+                            maxGain = nodesMovToGain[evIdx][2]
+                            maxIdx = evIdx
+                            maxE = e
+
+                    else:
+                        nodesMovToGain[evIdx] = [0,0,0.0]
+                
+                if maxIdx:
+#                    print("%d) Max reduction for node EVs %d vertex %d energy %f,"%(count,maxIdx,maxE.idx,nodesMovToGain[maxIdx][2]))
+                    Vxs[maxE.idx].co.x += nodesMovToGain[maxIdx][0]
+                    Vxs[maxE.idx].co.y += nodesMovToGain[maxIdx][2]
+                    maxE.calcEnergy()
+                    for ev in self.EVs:
+                        if ev.idx in maxE.adj:
+                            ev.calcEnergy()
+                else:
+                    break
+            delta = delta / 10
+            
+    def OLDminimizeEnergy(self, F, maxDeformation, deltaDeformation):
         global Vxs
         
       #  print("Energy minimizer ", maxDeformation)
@@ -384,7 +513,7 @@ class Flattener(bpy.types.Operator):
                         if not l[1] in vandl:
                             vandl.append(l[1])
                     #vandl contains the list of points and original length 
-                    #of the verctices not vix
+                    # of the vertices not vix
                     # energy accumulate the difference of energy
                     for v in vandl: 
                         dl = (Vxs[v[0]].co - Vxs[vix].co).length - v[1]
@@ -444,7 +573,7 @@ class Flattener(bpy.types.Operator):
                     print("No more gain, residual energy:", energy)
                     break
             delta = delta / 10
-          
+                
     def makeItFlat(self, obj, energyMinimizer, maxDeformation, deltaDeformation):
         # Variables
         #
@@ -465,7 +594,7 @@ class Flattener(bpy.types.Operator):
         VxFlat = []
         me = obj.data
         Vxs = me.vertices[:]
-        
+        count = 0
 #        pydevd.settrace(stdoutToServer=True, stderrToServer=True, suspend=True)
         s = None
         for p in me.polygons:
@@ -475,22 +604,24 @@ class Flattener(bpy.types.Operator):
          
         while V or A:
             if A:
-                s = A.pop()
+                s = A.pop(0)
             else:
                 s = V.pop()
+#                print("==============================restart from ",s.idx)
             # Collect all the adjacent triangle
             # and put it in Active collection "A"
             found = True
             while(found):
                 at = self.findAdjacentNonFlat(V, s)
                 if at:
-                    # debug("..adj is"+str(at))
+#                    print("..adj is",at.idx)
                     A.append(at)
                     V.remove(at) 
                     found = True
                 else:
                     found = False
-            # debug("Flattening: " + str(s))
+#            print(count," Flattening: " + str(s))
+            count += 1
             s.flatten()
             F.append(s)
     
