@@ -348,6 +348,7 @@ class enerVertex:
         self.idx = i
         self.adj = []
         self.energy = 0.0
+        self.evx = 0
 #        print("Create enVX ",i)
         
     def addAdjacent(self,iandl):
@@ -359,12 +360,40 @@ class enerVertex:
         global Vxs
         
         self.energy = 0
+#        print("..node ",self.idx)
         for v in self.adj: 
             dl = (Vxs[v[0]].co - Vxs[self.idx].co).length - v[1]
+#            print("...with ",v[0]," dl=",dl," over l=",v[1])
             self.energy = self.energy + dl*dl/ v[1]
 #            print("...calcEnergy [",self.idx,"-",v[0],"] dl=",dl," en=",self.energy)
-#        print("calcEnery total ", self.energy)
+#        print("...calcEnery total ", self.idx,self.energy)
         return self.energy
+    
+    def isAdjacent(self,i):
+        for a in self.adj:
+            if a[0] == i:
+                return True
+        return False
+    
+    def calcDeltaEnergy(self,delta):
+        global Vxs
+        
+        origEnergy = self.energy           
+        originalCo = Vxs[self.idx].co
+        Vxs[self.idx].co.x = originalCo.x + delta
+        self.overallpdx = self.calcEnergy()
+        Vxs[self.idx].co.x = originalCo.x - delta
+        self.overallmdx = self.calcEnergy()
+        Vxs[self.idx].co.x = originalCo.x
+        Vxs[self.idx].co.y = originalCo.y + delta
+        self.overallpdy = self.calcEnergy() 
+        Vxs[self.idx].co.y = originalCo.y - delta
+        self.overallmdy = self.calcEnergy()
+        Vxs[self.idx].co = originalCo
+        self.energy = origEnergy
+#        print("calcDeltaEnergy e,e+x,e-x,e+y,e-y ",self.idx,self.energy,self.overallpdx,self.overallmdx,self.overallpdy,self.overallmdy)
+#        print("                e,+x,-x,+y,-y     ",self.idx,self.energy,self.energy-self.overallpdx,self.energy-self.overallmdx,self.energy-self.overallpdy,self.energy-self.overallmdy)
+
     
 # =================================================================
 #             
@@ -379,7 +408,6 @@ class Flattener(bpy.types.Operator):
     bl_label = "Flat surface"
     bl_description = "bla bla bla"
     
-    EVs = []
             
     def findAdjacentNonFlat(self, Polys, p):
         # debug("findAdj of :"+str(p),3)
@@ -393,12 +421,31 @@ class Flattener(bpy.types.Operator):
                 return testP
         return None
              
+
+    def updateNodesMovToGain(self,e,delta):
+        minEnergy = min(e.overallpdx, e.overallmdx, e.overallpdy, e.overallmdy)                
+        if e.energy > minEnergy:
+            if e.overallpdx == minEnergy:
+                self.nodesMovToGain[e.evx] = [delta, 0, e.energy - e.overallpdx]
+            elif e.overallmdx == minEnergy:
+                self.nodesMovToGain[e.evx] = [-delta, 0, e.energy - e.overallmdx]
+            elif e.overallpdy == minEnergy:
+                self.nodesMovToGain[e.evx] = [0, delta, e.energy - e.overallpdy]
+            else:
+                self.nodesMovToGain[e.evx] = [0, -delta, e.energy - e.overallmdy]
+        else:
+            self.nodesMovToGain[e.evx] = [0,0,0.0]        
+
     def minimizeEnergy(self, F, maxDeformation, deltaDeformation):
         global Vxs
-        count = 0
+
         vlist = []
-        
-        print("="*20,"start","="*20)
+        EVs = []  
+        self.nodesMovToGain = []
+              
+        print("="*80)
+        print(" "*40,"start"," "*40)
+        print("="*80)
         for p in F:
             vlist = vlist + p.vertices
         #remove duplicates 
@@ -414,7 +461,6 @@ class Flattener(bpy.types.Operator):
                 if v in p.vertices:
                     C.append(p)
             # C now contains the list of polys with the vertix index vix
-            vandl = []
             for c in C:
                 # get the other two vertices that belongs to the common poly
                 l = c.adjacentVx(v)
@@ -423,156 +469,97 @@ class Flattener(bpy.types.Operator):
                 # if the second is not yet in the list added
                 e.addAdjacent(l[1])
             e.calcEnergy()
-            self.EVs.append(e)
-            count += 1
-#            if count > 80:
-#                return
-        
-        
+            e.evx = len(EVs)
+            EVs.append(e)
+        # end database build
+        #print("end database build")
+    
         MAXCOUNT = 5000
         delta = 0.1
-        while delta > 10**-deltaDeformation:
-            print("---------------> NEW Loop minimize delta=",delta)
-            for count in range(MAXCOUNT):
-                maxGain = maxDeformation
-                maxIdx = None
-                nodesMovToGain = [[0,0,0.0] for x in range(len(self.EVs))] 
-                for evIdx in range(len(self.EVs)):
-                    e = self.EVs[evIdx]
-                    origEnergy = e.energy           
-                    originalCo = Vxs[e.idx].co
-                    overallpdx = 0.0    
-                    overallmdx = 0.0
-                    overallpdy = 0.0
-                    overallmdy = 0.0
-                    Vxs[e.idx].co.x = originalCo.x + delta
-                    overallpdx = e.calcEnergy()
-                    Vxs[e.idx].co.x = originalCo.x - delta
-                    overallmdx = e.calcEnergy()
-                    Vxs[e.idx].co.x = originalCo.x
-                    Vxs[e.idx].co.y = originalCo.y + delta
-                    overallpdy = e.calcEnergy() 
-                    Vxs[e.idx].co.y = originalCo.y - delta
-                    overallmdy = e.calcEnergy()
-                    Vxs[e.idx].co = originalCo
-                    e.energy = origEnergy
-                    minEnergy = min(overallpdx, overallmdx, overallpdy, overallmdy)
-                    if origEnergy > minEnergy:
-                        if overallpdx == minEnergy:
-                            nodesMovToGain[evIdx] = [delta,0,origEnergy - overallpdx]
-                        elif overallmdx == minEnergy:
-                            nodesMovToGain[evIdx] = [-delta,0,origEnergy - overallmdx]
-                        elif overallpdy == minEnergy:
-                            nodesMovToGain[evIdx] = [0,delta,origEnergy - overallpdy]
-                        else:
-                            nodesMovToGain[evIdx] = [0,-delta,origEnergy - overallmdy]
-                        if nodesMovToGain[evIdx][2] > maxGain:
-#                            print("Better node idx,x,y,DeltaE ",e.idx,nodesMovToGain[evIdx][0],nodesMovToGain[evIdx][1],nodesMovToGain[evIdx][2])
-                            maxGain = nodesMovToGain[evIdx][2]
-                            maxIdx = evIdx
-                            maxE = e
-
-                    else:
-                        nodesMovToGain[evIdx] = [0,0,0.0]
-                
-                if maxIdx:
-#                    print("%d) Max reduction for node EVs %d vertex %d energy %f,"%(count,maxIdx,maxE.idx,nodesMovToGain[maxIdx][2]))
-                    Vxs[maxE.idx].co.x += nodesMovToGain[maxIdx][0]
-                    Vxs[maxE.idx].co.y += nodesMovToGain[maxIdx][2]
-                    maxE.calcEnergy()
-                    for ev in self.EVs:
-                        if ev.idx in maxE.adj:
-                            ev.calcEnergy()
-                else:
-                    break
-            delta = delta / 10
+        while delta >= 10**-deltaDeformation:
+            print("---------------> NEW Loop minimize delta=",delta,"minimum decrease",maxDeformation)
+            # Build the database
+            for e in EVs:
+                e.calcDeltaEnergy(delta)
+            maxGain = maxDeformation
+            maxIdx = None
+            self.nodesMovToGain = [[0, 0, 0.0] for x in range(len(EVs))]                
+            # Search the node with the max decrease in energy
+            # and populate the database of gains self.nodesMovToGain             
+            for evIdx in range(len(EVs)):
+                e = EVs[evIdx] 
+                if e.energy > maxDeformation:
+                    self.updateNodesMovToGain(e,delta)
+                    # if the gain is higher than the threshold or the best record the node
+    
+                    #if self.nodesMovToGain[evIdx][2]>0:
+                        #print("Node ",e.idx,"energy=",e.energy," dec energy=",self.nodesMovToGain[evIdx][2])
+                        
+                    if self.nodesMovToGain[evIdx][2] > maxGain:
+                        #print("..new max decr energy for",e.idx,"dec energy=",self.nodesMovToGain[evIdx][2])
+                        maxGain = self.nodesMovToGain[evIdx][2]
+                        maxIdx = evIdx
+                        maxE = e
+            # for evIdx in range(len(EVs)):
+            # - movToGain is now updated for the delta and for all nodes
+            # all nodes with suitable decrease of energy are in the database
+            # for the others the entry is 0
             
-    def OLDminimizeEnergy(self, F, maxDeformation, deltaDeformation):
-        global Vxs
-        
-      #  print("Energy minimizer ", maxDeformation)
-        MAXCOUNT = 5000
-        delta = 0.1
-        while delta > 10**-deltaDeformation:
-            print("---------------> Loop minimize delta=",delta)
-            for count in range(MAXCOUNT):
-                nodesMovToGain = [0 for x in range(len(Vxs))]            
-                for vix in range(len(Vxs)): 
-                    # get the triangles with the vertex vix in common
-                    C = []
-                    energy = 0
-                    for p in F:
-                        if vix in p.vertices:
-                            C.append(p)
-                    # C now contains the list of polys with the vertix index vix
-                    vandl = []
-                    for c in C:
-                        l = c.adjacentVx(vix)
-                        if not l[0] in vandl:
-                            vandl.append(l[0])
-                        if not l[1] in vandl:
-                            vandl.append(l[1])
-                    #vandl contains the list of points and original length 
-                    # of the vertices not vix
-                    # energy accumulate the difference of energy
-                    for v in vandl: 
-                        dl = (Vxs[v[0]].co - Vxs[vix].co).length - v[1]
-                        #dl = difference between original length and new length
-                        energy = energy + dl*dl/ v[1]
-                    originalCo = Vxs[vix].co
-                    overallpdx = 0.0
-                    overallmdx = 0.0
-                    overallpdy = 0.0
-                    overallmdy = 0.0
-                    Vxs[vix].co.x = originalCo.x + delta
-                    for v in vandl:
-                        dl = (Vxs[v[0]].co - Vxs[vix].co).length - v[1]
-                        overallpdx = overallpdx + dl* dl / v[1]
-                        # move the vertix by a -dx and calculate the overallmdx
-                    Vxs[vix].co.x = originalCo.x - delta
-                    for v in vandl:
-                        dl = (Vxs[v[0]].co - Vxs[vix].co).length - v[1]
-                        overallmdx = overallmdx + dl* dl / v[1]
-                        # move the vertix by a +dy and calculate the overallpdy
-                    Vxs[vix].co.x = originalCo.x
-                    Vxs[vix].co.y = originalCo.y + delta
-                    for v in vandl:
-                        dl = (Vxs[v[0]].co - Vxs[vix].co).length - v[1]
-                        overallpdy = overallpdy + dl*dl / v[1]
-                        # move the vertix by a -dy and calculate the overallpdx
-                    Vxs[vix].co.y = originalCo.y - delta
-                    for v in vandl:
-                        dl = (Vxs[v[0]].co - Vxs[vix].co).length - v[1]
-                        overallmdy = overallmdy + dl*dl / v[1]
-                    Vxs[vix].co = originalCo
-                    # the overallxxx are the energy with a small change in length
-                    if energy > min(overallpdx, overallmdx, overallpdy, overallmdy):
-                        if overallpdx == min(overallpdx, overallmdx, overallpdy, overallmdy):
-                            nodesMovToGain[vix] = [delta,0,energy - overallpdx]
-                        elif overallmdx == min(overallpdx, overallmdx, overallpdy, overallmdy):
-                            nodesMovToGain[vix] = [-delta,0,energy - overallmdx]
-                        elif overallpdy == min(overallpdx, overallmdx, overallpdy, overallmdy):
-                            nodesMovToGain[vix] = [0,delta,energy - overallpdy]
-                        else:
-                            nodesMovToGain[vix] = [0,-delta,energy - overallmdy]
-                    else:
-                            nodesMovToGain[vix] = [0,0,0.0]
-                
-                maxGain = maxDeformation
-                maxIdx = None
-                #search of the node with the max gain in term of energy
-                for n in range(len(nodesMovToGain)):
-                    if nodesMovToGain[n][2] > maxGain:
-                        maxGain = nodesMovToGain[n][2]
-                        maxIdx = n
+            # Go recursiverly in the database applying all changes for a max loops
+            # or until no further improvement can be found (MAXCOUNT or no maxIdx)
+            for count in range(MAXCOUNT):          
+                # if there one node that can minimize energy    
                 if maxIdx:
-#                    print("%d) Max reduction for node %d, Denergy %.6f coord %2.4f %2.4f"%(count,maxIdx,nodesMovToGain[maxIdx][2],Vxs[maxIdx].co.x,Vxs[maxIdx].co.y))
-                    Vxs[maxIdx].co.x += nodesMovToGain[maxIdx][0]
-                    Vxs[maxIdx].co.y += nodesMovToGain[maxIdx][1]
+                    print("Selected node ",maxE.idx,"energy=",maxE.energy," dec energy=",self.nodesMovToGain[maxE.evx][2])
+                    # apply the change in position
+                    Vxs[maxE.idx].co.x += self.nodesMovToGain[maxIdx][0]
+                    Vxs[maxE.idx].co.y += self.nodesMovToGain[maxIdx][1]
+                    # update the energy content and the deltas for the winnig vertex
+                    maxE.calcEnergy()
+                    maxE.calcDeltaEnergy(delta)               
+                    # update the database of nodeMovToGain for the winning vertex       
+                    self.updateNodesMovToGain(maxE,delta)  
+                    #print("..updating database for adjacent")                          
+                    for ev in EVs:
+                        if maxE.isAdjacent(ev.idx):
+                            #print("... update",ev.idx)
+                            ev.calcEnergy()
+                            if ev.energy > maxDeformation:                        
+                                ev.calcDeltaEnergy(delta)
+                                self.updateNodesMovToGain(ev,delta)
+                            else:
+                                self.nodesMovToGain[ev.evx] = [0.0,0.0,0.0]
+                                
+                    maxIdx = None      
+                    maxGain = maxDeformation
+                    #print("scanning database again")              
+                    for evIdx in range(len(EVs)):
+                        nmtg = self.nodesMovToGain[evIdx]
+                        e = EVs[evIdx] 
+                        #if nmtg[2] > 0:  
+                            #print("..node ",EVs[evIdx].idx,nmtg)
+                        if nmtg[2] > maxGain:
+                            maxGain = nmtg[2]
+                            maxIdx = evIdx
+                            maxE = EVs[maxIdx]     
                 else:
-                    print("No more gain, residual energy:", energy)
+                    # no more improvement exit the loop
                     break
+                # if maxIdx    
+            # for count in range(MAXCOUNT):
+
+            # decrease the movement step and repeat   
             delta = delta / 10
+
+        maxRE=0
+        idx=0
+        for e in EVs:
+            if e.energy > maxRE:
+                maxRE = e.energy
+                idx = e.idx
+        print("exit minimize energy, max residual energy node=",idx," energy=",maxRE)
+
+                     
                 
     def makeItFlat(self, obj, energyMinimizer, maxDeformation, deltaDeformation):
         # Variables
