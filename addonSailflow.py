@@ -561,7 +561,7 @@ class Flattener(bpy.types.Operator):
 
                      
                 
-    def makeItFlat(self, obj, energyMinimizer, maxDeformation, deltaDeformation):
+    def makeItFlat(self, obj, energyMinimizer, maxDeformation, deltaDeformation,polSeed):
         # Variables
         #
         # V available polygons
@@ -588,6 +588,13 @@ class Flattener(bpy.types.Operator):
             if p.select:
                 vt = MyPoly(p, idx=p.index)
                 V.append(vt)
+        
+        if polSeed != -1:
+            for vt in V:
+                if vt.idx == polSeed:
+                    A.append(vt)
+                    V.remove(vt)
+                    break;
          
         while V or A:
             if A:
@@ -627,8 +634,13 @@ class Flattener(bpy.types.Operator):
         sce = bpy.context.scene      
         if F:
             del F[:]
-            
-        self.makeItFlat(bpy.context.active_object, sce.sailflow_model.energyMinimizer, sce.sailflow_model.maxDeformation, sce.sailflow_model.deltaDeformation)
+        
+        if sce.sailflow_model.useSeed == False:
+            self.makeItFlat(bpy.context.active_object, sce.sailflow_model.energyMinimizer, sce.sailflow_model.maxDeformation, 
+                            sce.sailflow_model.deltaDeformation,-1)
+        else:        
+            self.makeItFlat(bpy.context.active_object, sce.sailflow_model.energyMinimizer, sce.sailflow_model.maxDeformation, 
+                            sce.sailflow_model.deltaDeformation,sce.sailflow_model.polSeed)
         # Complet list of vertices used
         vIdxList = []
         faces = []
@@ -690,6 +702,13 @@ class VIEW3D_PT_airprofile_print(bpy.types.Panel):
         col.prop(sce.sailflow_model, "paperFormat")
         col.prop(sce.sailflow_model, "freeText")
         col.prop(sce.sailflow_model, "multiPages")
+        col.prop(sce.sailflow_model, "margin")
+        col.prop(sce.sailflow_model, "overlap")
+        print(sce.sailflow_model.paperFormat)
+        if sce.sailflow_model.paperFormat == 'Other':
+            col.prop(sce.sailflow_model,"paperWidth")
+            col.prop(sce.sailflow_model,"paperHeight")
+ 
         
         col = layout.column(align=True)
         col.operator("mesh.print_pdf")
@@ -766,6 +785,9 @@ class VIEW3D_PT_flattener_parameters(bpy.types.Panel):
         col.prop(sce.sailflow_model,"energyMinimizer")
         col.prop(sce.sailflow_model,"deltaDeformation")
         col.prop(sce.sailflow_model,"maxDeformation") 
+        col.prop(sce.sailflow_model,"useSeed")
+        col.prop(sce.sailflow_model,"polSeed")
+        
         col = layout.column(align=True)    
         col.operator("mesh.flattener")
         
@@ -971,7 +993,14 @@ class AirProfile(bpy.types.Operator):
                             rmp = mp[1]+((mp[2]-mp[1])/heights[2])*(heightPerc-heights[1])    
                             rpp = pp[1]+((pp[2]-pp[1])/heights[2])*(heightPerc-heights[1])  
                         y = profile(x, rmp, rpp)
-                        a.data.vertices[v.index].co.z = y * (rightx - leftx) 
+                        if ellipDis:
+                            print("y=",(v.co.y-miny),"x=",x,"camber=",y)
+                            print("factor=",((v.co.y-halfSpanY)/halfSpan)**2)
+                            y = y*sqrt(1-((v.co.y-halfSpanY)/halfSpan)**2)
+                            a.data.vertices[v.index].co.z = y * (rightx - leftx)                            
+                        else:
+                            a.data.vertices[v.index].co.z = y * (rightx - leftx)
+
         elif ctype == 'CUSTOM':
             print("Custom profile")
             for v in a.data.vertices:
@@ -1062,9 +1091,11 @@ class printPDF(bpy.types.Operator):
                 vout2 = v
         return vout1,vout2
         
-    def makePDF(self, a, pe, vxs, fmt, freeTxt='', mp=False):
+    def makePDF(self, a, pe, vxs, fmt, freeTxt='', mp=False,offSetSet=0,overlapSet=0,w=0,h=0):
         xs = []
         ys = []
+
+        
         for e in pe:
             v0 = a.matrix_world * vxs[e[0]].co
             v1 = a.matrix_world * vxs[e[1]].co
@@ -1080,95 +1111,79 @@ class printPDF(bpy.types.Operator):
             vc = a.matrix_world * v.co        
             vxs_pix.append(Vector([(vc.x - min_x) * self.unitToMm, (vc.y - min_y) * self.unitToMm]))
 
-        print("Vector")
-        for i in range(len(vxs_pix)):
-            print(i,vxs_pix[i])
+        #print("Vector")
+        #for i in range(len(vxs_pix)):
+            #print(i,vxs_pix[i])
             
         fname = self.filepath   
-        pdf = FPDF(format=fmt)
-        self.offSet = pdf.dimension()[0]*0.01 
+        pdf = FPDF(format=fmt,pw=w,ph=h) 
+        offSet = pdf.dimension()[0]*offSetSet/100 
+        #percentage of the offSet used for overlap between pages
+        overlap = pdf.dimension()[0]*overlapSet/100
         pdf.set_compression(False)
         if not mp:
             pdf.add_page()
             for e in pe:
                 p1 = vxs_pix[e[0]]
                 p2 = vxs_pix[e[1]]
-                pdf.line(p1.x + self.offSet, (pdf.dimension()[1]-p1.y)-self.offSet , p2.x + self.offSet, (pdf.dimension()[1]-p2.y)-self.offSet)
+                pdf.line(p1.x + offSet, (pdf.dimension()[1]-p1.y)-offSet , p2.x + offSet, (pdf.dimension()[1]-p2.y)-offSet)
             
             # Make the header
             pdf.set_x(0)
             pdf.set_y(0)
             date = str(time.localtime().tm_mday) + "/" + str(time.localtime().tm_mon) + "/" + str(time.localtime().tm_year)
-            pdf.set_font('Arial', 'B', 24)
-            pdf.cell(w=75, h=10, txt=a.name, border=1, ln=2, align='C')
-            pdf.set_font(family='Arial', size=16)    
+            pdf.set_font('Arial', 'B', 12)
+            #pdf.cell(w=75, h=10, txt=a.name, border=1, ln=2, align='C')
+            #pdf.set_font(family='Arial', size=12)    
             pdf.cell(w=75, h=5, txt=date, border=1, ln=2, align='C')
-            pdf.cell(w=75, h=5, txt=freeTxt + " ", border=1, ln=0, align='C')
+            #pdf.cell(w=75, h=5, txt=freeTxt + " ", border=1, ln=0, align='C')
         else:
-            maxx = -100000
-            maxy = -100000
-            miny = 100000
-            minx = 100000
-            clipSizeH = int(pdf.dimension()[0]-2*self.offSet) 
-            clipSizeV = int(pdf.dimension()[1]-2*self.offSet)  
-            for v in vxs_pix:
-                if minx > v.x:
-                    minx = v.x
-                if maxx < v.x:
-                    maxx = v.x
-                if maxy < v.y:
-                    maxy = v.y
-                if miny > v.y:
-                    miny = v.y
-            numPagesH = int((maxx - minx)/clipSizeH)+1
-            numPagesV = int((maxy - miny)/clipSizeV)+1  
-            print("-"*80)
-            print("Num pages H & V,",clipSizeH,clipSizeV," pages -->",numPagesH,numPagesV)      
-            print("-"*80)
+            clipSizeH = int(pdf.dimension()[0]-2*offSet) 
+            clipSizeV = int(pdf.dimension()[1]-2*offSet)  
+            minx = min([v.x for v in vxs_pix])
+            maxx = max([v.x for v in vxs_pix])
+            miny = min([v.y for v in vxs_pix])
+            maxy = max([v.y for v in vxs_pix])
+            numPagesH = int((maxx - minx)/(clipSizeH-overlap))+1
+            numPagesV = int((maxy - miny)/(clipSizeV-overlap))+1  
  
             for h in range(0,numPagesH):
                 for v in range(0,numPagesV):
                     pdf.add_page()
-                    print("="*40)
-                    print("New page h=%d v=%d"%(h,v))
-                    print("="*40)
                     line=0
                     for e in pe:
                         # Translate the points
                         cross1 = Vector([vxs_pix[e[0]].x,vxs_pix[e[0]].y])
                         cross2 = Vector([vxs_pix[e[1]].x,vxs_pix[e[1]].y])
-                        cross1.x = cross1.x - float(clipSizeH*h)
-                        cross2.x = cross2.x - float(clipSizeH*h)
-                        cross1.y = cross1.y - float(clipSizeV*v)
-                        cross2.y = cross2.y - float(clipSizeV*v)
-                                                
-                        if (self.containedIn(cross1,clipSizeH, clipSizeV) and
-                            self.containedIn(cross2,clipSizeH, clipSizeV)):
-                            #print("  All contained",e[0],e[1],cross1,cross2)
-                            pdf.line(cross1.x+self.offSet,(pdf.dimension()[1]-cross1.y)-self.offSet,
-                                     cross2.x+self.offSet,(pdf.dimension()[1]-cross2.y)-self.offSet)
-                            line +=1
-                            
-                        else:
-                            #print("  clipping",e[0],e[1],cross1,cross2)
-                            cross1, cross2 = self.clipping(cross1,cross2,clipSizeH, clipSizeV)
-                            #print("  return clipping",e[0],e[1],cross1,cross2)
-                            if cross1 != None and cross2 != None:
-                                pdf.line(cross1.x+self.offSet,(pdf.dimension()[1]-cross1.y)-self.offSet,
-                                         cross2.x+self.offSet,(pdf.dimension()[1]-cross2.y)-self.offSet)
-                                line +=1
-                                
-                    #pdf.set_line_width(0.2)        
-                    #pdf.rect(self.offSet/2,self.offSet/2,pdf.dimension()[0]-2*self.offSet/2,pdf.dimension()[1]-2*self.offSet/2)
+                        cross1.x = cross1.x - float(clipSizeH*h)+float(overlap*h)
+                        cross2.x = cross2.x - float(clipSizeH*h)+float(overlap*h)
+                        cross1.y = cross1.y - float(clipSizeV*v)+float(overlap*v)
+                        cross2.y = cross2.y - float(clipSizeV*v)+float(overlap*v)
 
+                        if not (self.containedIn(cross1,clipSizeH, clipSizeV) and
+                                self.containedIn(cross2,clipSizeH, clipSizeV)):
+                            cross1, cross2 = self.clipping(cross1,cross2,clipSizeH, clipSizeV)
+ 
+                        if cross1 != None and cross2 != None:
+                            pdf.line(cross1.x+offSet,
+                                     (pdf.dimension()[1]-cross1.y)-offSet,
+                                     cross2.x+offSet,
+                                     (pdf.dimension()[1]-cross2.y)-offSet)
+                            line +=1
+                    
+                    if (h+v!=0):                 
+                        pdf.set_line_width(0.2)        
+                        pdf.line(0.0,pdf.dimension()[1]-offSet-overlap,pdf.dimension()[0],pdf.dimension()[1]-offSet-overlap)
+                        pdf.line(offSet+overlap,0.0,offSet+overlap,pdf.dimension()[1] )
+                    
                     pdf.set_x(0)
                     pdf.set_y(0)   
-                    date = str(time.localtime().tm_mday) + "/" + str(time.localtime().tm_mon) + "/" + str(time.localtime().tm_year)
-                    pdf.set_font('Arial', 'B', 24)
-                    pdf.cell(w=75, h=10, txt=a.name+"V:"+str(h)+" H:"+str(v), border=1, ln=2, align='C')
-                    pdf.set_font(family='Arial', size=16)    
-                    pdf.cell(w=75, h=5, txt=date, border=1, ln=2, align='C')
-                    pdf.cell(w=75, h=5, txt=freeTxt + " ", border=1, ln=0, align='C')
+                    #date = str(time.localtime().tm_mday) + "/" + str(time.localtime().tm_mon) + "/" + str(time.localtime().tm_year)
+                    #pdf.set_font('Arial', 'B', 24)
+                    pdf.set_font(family='Arial', size=12)    
+                    pdf.cell(w=75, h=10, txt=a.name+"H:"+str(h)+" V:"+str(v), border=1, ln=2, align='C')
+                    #pdf.cell(w=75, h=5, txt=date, border=1, ln=2, align='C')
+                    #pdf.cell(w=75, h=5, txt=freeTxt + " ", border=1, ln=0, align='C')
                      
                     
         pdf.output(fname, 'F')    
@@ -1181,7 +1196,8 @@ class printPDF(bpy.types.Operator):
             for e in p.edge_keys:
                 el.append((e[1], e[0]))
         vxs = a.data.vertices
-        self.makePDF(a, el, vxs, sce.sailflow_model.paperFormat, sce.sailflow_model.freeText,sce.sailflow_model.multiPages);  
+        se = sce.sailflow_model
+        self.makePDF(a, el, vxs, se.paperFormat, se.freeText,se.multiPages,se.margin,se.overlap,se.paperWidth,se.paperHeight);  
         return {'FINISHED'}
     
     def invoke(self, context,event):
@@ -1221,8 +1237,21 @@ class AirFoilSettings(bpy.types.PropertyGroup):
     energyMinimizer = bpy.props.BoolProperty(name="Stress Relief", default=False)
     maxDeformation = bpy.props.FloatProperty(name="Min stress reduction", default=0.001, min=0.000001, max=0.1)
     deltaDeformation = bpy.props.IntProperty(name="accuracy", default=3, min=1, max=10)
-    paperFormat = bpy.props.StringProperty (name="Paper Size",description="4a0,2a0,a0,a1,a2,a3,a4",default='a0')
+    polSeed = bpy.props.IntProperty(name="Use start face",default=-1)
+    useSeed =  bpy.props.BoolProperty(name="Start from face", default=False)
+    
+    #paperFormat = bpy.props.StringProperty (name="Paper Size",description="others,4a0,2a0,a0,a1,a2,a3,a4",default='a0')
     freeText = bpy.props.StringProperty (name="Free Text", description="Anything appearing in the PDF",default='free text')
+    margin = IntProperty (name="% of page margin",
+                          default=10,
+                          min=0,
+                          max=25)
+    overlap = IntProperty (name="% of overlap bw pages",
+                          default=10,
+                          min=0,
+                          max=25)
+    paperWidth = IntProperty(name="Width",max=1000)
+    paperHeight = IntProperty(name="Height", max=3500)
     
     ellipDis = BoolProperty(name="Eliptic Distribution", default=False)
     
@@ -1241,7 +1270,9 @@ class AirFoilSettings(bpy.types.PropertyGroup):
       ("A1","a1","",4),
       ("A2","a2","",5),
       ("A3","a3","",6),
-      ("A4","a4","",7)]
+      ("A4","a4","",7),
+      ("Other","other","",8)]
+    
     paperFormat = bpy.props.EnumProperty (name = "Paper Size", default="A4",items=paperSizes)   
     freeText = bpy.props.StringProperty (name = "Free Text", description = "Anything appearing in the PDF", default = 'free text')
     multiPages = bpy.props.BoolProperty(name="Multi pages",default=False)
