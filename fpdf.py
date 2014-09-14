@@ -49,7 +49,7 @@ def set_global(var, val):
 class FPDF(object):
     "PDF Generation class"
     
-    def __init__(self, orientation='P',unit='mm',format='A4'):
+    def __init__(self, orientation='P',unit='mm',format='A4',w,h):
         # Some checks
         self._dochecks()
         # Initialization of properties
@@ -117,8 +117,8 @@ class FPDF(object):
                 format=(420.94,595.28)
             elif(format=='letter'):
                 format=(612,792)
-            elif(format=='legal'):
-                format=(612,1008)
+            elif(format=='other'):
+                format=(w/mmToPt,h/mmToPt)
             else:
                 self.error('Unknown page format: '+format)
             self.fw_pt=format[0]
