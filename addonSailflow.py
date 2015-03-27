@@ -510,7 +510,7 @@ class Flattener(bpy.types.Operator):
             for count in range(MAXCOUNT):          
                 # if there one node that can minimize energy    
                 if maxIdx:
-                    print("Selected node ",maxE.idx,"energy=",maxE.energy," dec energy=",self.nodesMovToGain[maxE.evx][2])
+                    #print("Selected node ",maxE.idx,"energy=",maxE.energy," dec energy=",self.nodesMovToGain[maxE.evx][2])
                     # apply the change in position
                     Vxs[maxE.idx].co.x += self.nodesMovToGain[maxIdx][0]
                     Vxs[maxE.idx].co.y += self.nodesMovToGain[maxIdx][1]
@@ -558,7 +558,7 @@ class Flattener(bpy.types.Operator):
                 maxRE = e.energy
                 idx = e.idx
         print("exit minimize energy, max residual energy node=",idx," energy=",maxRE)
-
+        return maxRE
                      
                 
     def makeItFlat(self, obj, energyMinimizer, maxDeformation, deltaDeformation,polSeed):
@@ -620,7 +620,9 @@ class Flattener(bpy.types.Operator):
             F.append(s)
     
         if energyMinimizer:
-            self.minimizeEnergy(F, maxDeformation, deltaDeformation)
+            return(self.minimizeEnergy(F, maxDeformation, deltaDeformation))
+        else:
+            return 0
        
     @classmethod
     def poll(cls, context):
@@ -631,7 +633,10 @@ class Flattener(bpy.types.Operator):
         global F
         
 
-        sce = bpy.context.scene      
+        sce = bpy.context.scene  
+        # Record the selected faces
+        bpy.context.active_object.update_from_editmode()
+            
         if F:
             del F[:]
         
@@ -639,8 +644,8 @@ class Flattener(bpy.types.Operator):
             self.makeItFlat(bpy.context.active_object, sce.sailflow_model.energyMinimizer, sce.sailflow_model.maxDeformation, 
                             sce.sailflow_model.deltaDeformation,-1)
         else:        
-            self.makeItFlat(bpy.context.active_object, sce.sailflow_model.energyMinimizer, sce.sailflow_model.maxDeformation, 
-                            sce.sailflow_model.deltaDeformation,sce.sailflow_model.polSeed)
+            sce.sailflow_model.resEnergy = self.makeItFlat(bpy.context.active_object, sce.sailflow_model.energyMinimizer, sce.sailflow_model.maxDeformation, 
+                                            sce.sailflow_model.deltaDeformation,sce.sailflow_model.polSeed)
         # Complet list of vertices used
         vIdxList = []
         faces = []
@@ -688,6 +693,81 @@ class Flattener(bpy.types.Operator):
         scene.objects.link(fobj)  
         return {'FINISHED'} 
 
+class PMemorize(bpy.types.Operator):
+    bl_idname = "mesh.panelmem"
+    bl_label = "Panel Memorize"
+    bl_description = "bla bla bla"
+    
+    def execute(self,context):
+        bpy.ops.object.mode_set(mode = 'OBJECT')
+        bpy.ops.object.mode_set(mode = 'EDIT')
+                
+        sce = bpy.context.scene        
+        faces = bpy.context.active_object.data.polygons
+        for face in faces:
+            if face.select:
+                if sce.sailflow_model.panelNumber == 1:
+                    sce.sailflow_model.panel1.append(face.index)
+                elif sce.sailflow_model.panelNumber == 2:
+                    sce.sailflow_model.panel2.append(face.index)
+                elif sce.sailflow_model.panelNumber == 3:
+                    sce.sailflow_model.panel3.append(face.index)
+                elif sce.sailflow_model.panelNumber == 4:
+                    sce.sailflow_model.panel4.append(face.index)
+                elif sce.sailflow_model.panelNumber == 5:
+                    sce.sailflow_model.panel5.append(face.index)
+                elif sce.sailflow_model.panelNumber == 6:
+                    sce.sailflow_model.panel6.append(face.index)
+                elif sce.sailflow_model.panelNumber == 7:
+                    sce.sailflow_model.panel7.append(face.index)
+                elif sce.sailflow_model.panelNumber == 8:
+                    sce.sailflow_model.panel8.append(face.index)
+                elif sce.sailflow_model.panelNumber == 9:
+                    sce.sailflow_model.panel9.append(face.index)
+                elif sce.sailflow_model.panelNumber == 10:
+                    sce.sailflow_model.panel10.append(face.index)
+                    
+        return {'FINISHED'} 
+
+class PRecall(bpy.types.Operator):
+    bl_idname = "mesh.panelrec"
+    bl_label = "Panel Recall"
+    bl_description = "bla bla bla"
+
+    def execute(self,context):
+        sce = bpy.context.scene        
+        faces = bpy.context.active_object.data.polygons
+        bpy.ops.mesh.select_all(action='DESELECT')        
+        bpy.ops.object.mode_set(mode = 'OBJECT')
+        if sce.sailflow_model.panelNumber == 1:
+            p = sce.sailflow_model.panel1
+        elif sce.sailflow_model.panelNumber == 2:
+            p = sce.sailflow_model.panel2
+        elif sce.sailflow_model.panelNumber == 3:
+            p = sce.sailflow_model.panel3
+        elif sce.sailflow_model.panelNumber == 4:
+            p = sce.sailflow_model.panel4
+        elif sce.sailflow_model.panelNumber == 5:
+            p = sce.sailflow_model.panel5
+        elif sce.sailflow_model.panelNumber == 6:
+            p = sce.sailflow_model.panel6
+        elif sce.sailflow_model.panelNumber == 7:
+            p = sce.sailflow_model.panel7
+        elif sce.sailflow_model.panelNumber == 8:
+            p = sce.sailflow_model.panel8
+        elif sce.sailflow_model.panelNumber == 9:
+            p = sce.sailflow_model.panel9
+        elif sce.sailflow_model.panelNumber == 10:
+            p = sce.sailflow_model.panel10  
+        
+        for fidx in p:
+            faces[fidx].select = True
+            print("set face ",fidx)
+        bpy.ops.object.mode_set(mode = 'EDIT')
+
+        return {'FINISHED'} 
+                    
+    
 class VIEW3D_PT_airprofile_print(bpy.types.Panel):
     bl_label = "PDF Generation"
     bl_space_type = "VIEW_3D"
@@ -704,7 +784,7 @@ class VIEW3D_PT_airprofile_print(bpy.types.Panel):
         col.prop(sce.sailflow_model, "multiPages")
         col.prop(sce.sailflow_model, "margin")
         col.prop(sce.sailflow_model, "overlap")
-        print(sce.sailflow_model.paperFormat)
+
         if sce.sailflow_model.paperFormat == 'Other':
             col.prop(sce.sailflow_model,"paperWidth")
             col.prop(sce.sailflow_model,"paperHeight")
@@ -787,9 +867,29 @@ class VIEW3D_PT_flattener_parameters(bpy.types.Panel):
         col.prop(sce.sailflow_model,"maxDeformation") 
         col.prop(sce.sailflow_model,"useSeed")
         col.prop(sce.sailflow_model,"polSeed")
+        col.prop(sce.sailflow_model,"resEnergy")
         
         col = layout.column(align=True)    
         col.operator("mesh.flattener")
+        
+class VIEW3D_PT_setPanel(bpy.types.Panel):
+    bl_label = "Panels"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "TOOLS"
+    bl_category = "Sailflow Design"
+        
+    def draw(self, context):
+        sce = bpy.context.scene
+        layout = self.layout
+
+        col = layout.column(align=True)    
+        col.prop(sce.sailflow_model,"panelNumber")
+        
+        col = layout.column(align=True)    
+        col.operator("mesh.panelmem")
+
+        col = layout.column(align=True)    
+        col.operator("mesh.panelrec")
         
 class LibraryLoader(bpy.types.Operator):
     bl_idname = "mesh.load_library"
@@ -995,7 +1095,7 @@ class AirProfile(bpy.types.Operator):
                         y = profile(x, rmp, rpp)
                         if ellipDis:
                             print("y=",(v.co.y-miny),"x=",x,"camber=",y)
-                            print("factor=",((v.co.y-halfSpanY)/halfSpan)**2)
+                            print("factor=",1-((v.co.y-halfSpanY)/halfSpan)**2)
                             y = y*sqrt(1-((v.co.y-halfSpanY)/halfSpan)**2)
                             a.data.vertices[v.index].co.z = y * (rightx - leftx)                            
                         else:
@@ -1013,10 +1113,12 @@ class AirProfile(bpy.types.Operator):
                         rightx = max(x1, x2)
                         x = (v.co.x - leftx) / (rightx - leftx+0.0001)
                         heightPerc = (v.co.y - miny) / (maxy - miny)
-                        y = custom_profile.profile(x, heightPerc,v.co.x,v.co.y)
+                        y = custom_profile.profile(x, heightPerc,v.co.x,v.co.y,miny,maxy)
                         if ellipDis:
-                            y = y*sqrt(1-((v.co.y-miny)/halfSpan)**2)
-                            a.data.vertices[v.index].co.z = y * (rightx - leftx) * weight                             
+                            print("y=",(v.co.y-miny),"x=",x,"camber=",y)
+                            print("factor=",1-((v.co.y-halfSpanY)/halfSpan)**2)
+                            y = y*sqrt(1-((v.co.y-halfSpanY)/halfSpan)**2)
+                            a.data.vertices[v.index].co.z = y * (rightx - leftx)                            
                         else:    
                             a.data.vertices[v.index].co.z = y * (rightx - leftx)
                 
@@ -1239,6 +1341,7 @@ class AirFoilSettings(bpy.types.PropertyGroup):
     deltaDeformation = bpy.props.IntProperty(name="accuracy", default=3, min=1, max=10)
     polSeed = bpy.props.IntProperty(name="Use start face",default=-1)
     useSeed =  bpy.props.BoolProperty(name="Start from face", default=False)
+    resEnergy = bpy.props.FloatProperty(name="Residual Strain",default=0)
     
     #paperFormat = bpy.props.StringProperty (name="Paper Size",description="others,4a0,2a0,a0,a1,a2,a3,a4",default='a0')
     freeText = bpy.props.StringProperty (name="Free Text", description="Anything appearing in the PDF",default='free text')
@@ -1276,13 +1379,23 @@ class AirFoilSettings(bpy.types.PropertyGroup):
     paperFormat = bpy.props.EnumProperty (name = "Paper Size", default="A4",items=paperSizes)   
     freeText = bpy.props.StringProperty (name = "Free Text", description = "Anything appearing in the PDF", default = 'free text')
     multiPages = bpy.props.BoolProperty(name="Multi pages",default=False)
+    panel1 = []
+    panel2 = []
+    panel3 = []
+    panel4 = []
+    panel5 = []
+    panel6 = []
+    panel7 = []
+    panel8 = []
+    panel9 = []
+    panel10 = []
+    panelNumber = IntProperty(name="Panel Number",min=1,max=10)
                                     
 def register():
     bpy.utils.register_module(__name__)
     bpy.types.Scene.sailflow_model = bpy.props.PointerProperty(type=AirFoilSettings,
                                         name="Airfoil Model",
-                                        description="Setting of the AirFoil",
-                                        options={'SKIP_SAVE'})
+                                        description="Setting of the AirFoil")
 
 def unregister():
     bpy.utils.unregister_module(__name__)
