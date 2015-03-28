@@ -55,6 +55,17 @@ def profile(x, m, p):
     # debug(("Profile return Z="+str(y))
     return y
 
+def curveProfile(x,vxs):
+
+    for i in vxs:
+        if i.x > x:
+            found = True
+            break       
+    if found: 
+        return i.y
+    else:
+        return 0
+ 
  
 class MyPoly:
     l1 = 0  # p1 - p3
@@ -831,6 +842,11 @@ class VIEW3D_PT_airprofile_parameters(bpy.types.Panel):
             col.operator("mesh.load_library")
             col = layout.column(align=True)  
             
+        elif sce.sailflow_model.t == "CURVE":
+            col.operator("mesh.bezier_aquire")
+            col.operator("mesh.curve_aquire")
+            col = layout.column(align=True)  
+
         col = layout.column(align=True)
         col.prop(sce.sailflow_model, "weight")
         
@@ -890,7 +906,118 @@ class VIEW3D_PT_setPanel(bpy.types.Panel):
 
         col = layout.column(align=True)    
         col.operator("mesh.panelrec")
+
+class CurveAquire(bpy.types.Operator):
+    bl_idname = "mesh.curve_aquire"
+    bl_label = "Aquire Mesh Curve"
+    bl_description = "Generate the sail custom profile from curve"    
+
+    def execute (self, context):
+        print("called aquire")
+        obj = bpy.context.active_object
+        sce = bpy.context.scene
+
+        points = []
+        for v in obj.data.vertices:
+            points.append(v.co)
+            
+        maxx = -1000
+        minx = 1000
+        miny = 1000
         
+        for p in points:
+            if p.x < minx:
+                minx = p.x
+            elif p.x > maxx:
+                maxx = p.x
+            if p.y < miny:
+                miny = p.y
+
+        l = maxx-minx
+                         
+        del sce.sailflow_model.curvePoints[:]
+        p = list(points)
+        points = p
+        for v in points:
+            v.x = (v.x - minx)/l
+            v.y = (v.y - miny)/l
+            sce.sailflow_model.curvePoints.append(v)
+        return {'FINISHED'}
+
+from mathutils.geometry import interpolate_bezier
+
+class BezierAquire(bpy.types.Operator):
+    bl_idname = "mesh.bezier_aquire"
+    bl_label = "Aquire Bezier Curve"
+    bl_description = "Generate the sail custom profile from curve"    
+
+    def get_points(self,sp, clean=True):
+        
+        knots = sp.bezier_points
+        if len(knots) < 2:
+            return
+    
+        # verts per segment
+        r = sp.resolution_u + 1
+        
+        # segments in spline
+        segments = len(knots)
+        
+        if not sp.use_cyclic_u:
+            segments -= 1
+    
+        master_point_list = []
+        for i in range(segments):
+            inext = (i + 1) % len(knots)
+    
+            knot1 = knots[i].co
+            handle1 = knots[i].handle_right
+            handle2 = knots[inext].handle_left
+            knot2 = knots[inext].co
+            
+            bezier = knot1, handle1, handle2, knot2, r
+            points = interpolate_bezier(*bezier)
+            master_point_list.extend(points)
+    
+        # some clean up to remove consecutive doubles, this could be smarter...
+        if clean:
+            old = master_point_list
+            good = [v for i, v in enumerate(old[:-1]) if not old[i] == old[i+1]]
+            good.append(old[-1])
+            return good
+                
+        return master_point_list
+
+    def execute (self, context):
+        print("called aquire")
+        obj = bpy.context.active_object
+        sce = bpy.context.scene
+
+        points = self.get_points(bpy.context.active_object.data.splines[0])
+
+        maxx = -1000
+        minx = 1000
+        miny = 1000
+        
+        for p in points:
+            if p.x < minx:
+                minx = p.x
+            elif p.x > maxx:
+                maxx = p.x
+            if p.y < miny:
+                miny = p.y
+
+        l = maxx-minx
+                         
+        del sce.sailflow_model.curvePoints[:]
+        for v in points:
+            v.x = (v.x - minx)/l
+            v.y = (v.y - miny)/l
+            sce.sailflow_model.curvePoints.append(v)
+        return {'FINISHED'}
+    
+
+      
 class LibraryLoader(bpy.types.Operator):
     bl_idname = "mesh.load_library"
     bl_label = "Load profiler"
@@ -1121,8 +1248,28 @@ class AirProfile(bpy.types.Operator):
                             a.data.vertices[v.index].co.z = y * (rightx - leftx)                            
                         else:    
                             a.data.vertices[v.index].co.z = y * (rightx - leftx)
-                
-            
+                            
+        elif ctype == 'CURVE':
+            print("Curve profile option")
+            for v in a.data.vertices:
+                if not v.index in pv:
+                    e1, e2 = self.getEdgesCrossing(a.data.vertices, pe, v.co.y)
+                    if e1[0] != -1 and e2[0] != -1:
+                        x1 = self.getXinEdge(a.data.vertices, e1, v.co.y)
+                        x2 = self.getXinEdge(a.data.vertices, e2, v.co.y)
+                        leftx = min(x1, x2)
+                        rightx = max(x1, x2)
+                        x = (v.co.x - leftx) / (rightx - leftx+0.0001)
+                        heightPerc = (v.co.y - miny) / (maxy - miny)
+                        y = curveProfile(x, sce.sailflow_model.curvePoints)
+                        if ellipDis:
+                            print("y=",(v.co.y-miny),"x=",x,"camber=",y)
+                            print("factor=",1-((v.co.y-halfSpanY)/halfSpan)**2)
+                            y = y*sqrt(1-((v.co.y-halfSpanY)/halfSpan)**2)
+                            a.data.vertices[v.index].co.z = y * (rightx - leftx)                            
+                        else:    
+                            a.data.vertices[v.index].co.z = y * (rightx - leftx)
+              
             
     def execute(self, context):
         print("Called airprofile")    
@@ -1315,7 +1462,8 @@ class AirFoilSettings(bpy.types.PropertyGroup):
     curveTypes = [
       ("NACA", "Naca 4", "", 1),
       ("THREE", "Three Sections", "", 2),
-      ("CUSTOM", "Custom Profile", "", 3)
+      ("CUSTOM", "Custom Profile", "", 3),
+      ("CURVE" , "Curve", "", 4),
       ]
     m = IntProperty (
         name="% Max Camber",
@@ -1390,6 +1538,8 @@ class AirFoilSettings(bpy.types.PropertyGroup):
     panel9 = []
     panel10 = []
     panelNumber = IntProperty(name="Panel Number",min=1,max=10)
+    
+    curvePoints = []
                                     
 def register():
     bpy.utils.register_module(__name__)
