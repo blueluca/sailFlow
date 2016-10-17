@@ -65,8 +65,7 @@ def curveProfile(x,vxs):
         return i.y
     else:
         return 0
- 
- 
+
 class MyPoly:
     l1 = 0  # p1 - p3
     l2 = 0  # p1 - p2
@@ -777,8 +776,7 @@ class PRecall(bpy.types.Operator):
         bpy.ops.object.mode_set(mode = 'EDIT')
 
         return {'FINISHED'} 
-                    
-    
+
 class VIEW3D_PT_airprofile_print(bpy.types.Panel):
     bl_label = "PDF Generation"
     bl_space_type = "VIEW_3D"
@@ -1015,8 +1013,6 @@ class BezierAquire(bpy.types.Operator):
             v.y = (v.y - miny)/l
             sce.sailflow_model.curvePoints.append(v)
         return {'FINISHED'}
-    
-
       
 class LibraryLoader(bpy.types.Operator):
     bl_idname = "mesh.load_library"
