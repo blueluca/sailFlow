@@ -38,6 +38,23 @@ FlatVxs = []
 F = []
 VxFlat = []
 
+def extractPerimeterEdges(m):
+    el = []
+    perifEdgeList = []
+    for p in m.data.polygons:
+        for e in p.edge_keys:
+            if e[0] > e[1]:
+                el.append((e[1], e[0]))
+            else:
+                el.append(e)
+    while el:
+        e = el.pop()
+        if e in el:
+            el.remove(e)
+        else:
+            perifEdgeList.append(e)
+    return perifEdgeList
+
 def profile(x, m, p):
 #=====================================================================================
 # The profile calculator
@@ -419,7 +436,6 @@ class Flattener(bpy.types.Operator):
     bl_label = "Flat surface"
     bl_description = "bla bla bla"
 
-
     def findAdjacentNonFlat(self, Polys, p):
         # debug("findAdj of :"+str(p),3)
         for testP in Polys:
@@ -431,7 +447,6 @@ class Flattener(bpy.types.Operator):
             elif (testP.p3 in p.vertices) and (testP.p1 in p.vertices):
                 return testP
         return None
-
 
     def updateNodesMovToGain(self,e,delta):
         minEnergy = min(e.overallpdx, e.overallmdx, e.overallpdy, e.overallmdy)
@@ -570,7 +585,6 @@ class Flattener(bpy.types.Operator):
                 idx = e.idx
         print("exit minimize energy, max residual energy node=",idx," energy=",maxRE)
         return maxRE
-
 
     def makeItFlat(self, obj, energyMinimizer, maxDeformation, deltaDeformation,polSeed):
         # Variables
@@ -779,7 +793,7 @@ class PRecall(bpy.types.Operator):
         return {'FINISHED'}
 
 class VIEW3D_PT_airprofile_print(bpy.types.Panel):
-    bl_label = "PDF Generation"
+    bl_label = "Printout Generation"
     bl_space_type = "VIEW_3D"
     bl_region_type = "TOOLS"
     bl_category = "Sailflow Develop"
@@ -802,6 +816,12 @@ class VIEW3D_PT_airprofile_print(bpy.types.Panel):
 
         col = layout.column(align=True)
         col.operator("mesh.print_pdf")
+        #
+        # Print in ASCII
+        #
+        col = layout.column(align=True)
+        col.prop(sce.sailflow_model,"asciiDx")
+        col.operator("mesh.print_ascii")
 
 class VIEW3D_PT_airprofile_parameters(bpy.types.Panel):
     bl_label = "Profile Parameters"
@@ -1557,7 +1577,7 @@ class AirProfile(bpy.types.Operator):
             a = bpy.data.objects["Sail"]
         for v in a.data.vertices:
             v.co.z = 0
-        pe = self.extractPerimeterEdges(a)
+        pe = extractPerimeterEdges(a)
         pv = []
         for e in pe:
             pv.append(e[0])
@@ -1862,6 +1882,61 @@ class printPDF(bpy.types.Operator):
     def poll(cls, context):
         return context.active_object and context.active_object.type == 'MESH'
 
+class outputAscii(bpy.types.Operator):
+    bl_idname = "mesh.print_ascii"
+    bl_label = "Print ASCII"
+    bl_description = "print ASCII description of selected panel"
+    filepath = bpy.props.StringProperty(subtype="FILE_PATH")
+
+    def execute(self,context):
+        sce = bpy.context.scene
+
+        plotDX = sce.sailflow_model.asciiDx
+
+        obj = context.active_object
+        # finds the minimum and max X of the panel scanning all vertices
+        vxs = [(v.co.x,v.co.y,idx) for idx,v in enumerate(obj.data.vertices)]
+        xmin = min(vxs, key = lambda t: t[0])[0]
+        xmax = max(vxs, key = lambda t: t[0])[0]
+        ymin = min(vxs, key= lambda t: t[1])[1]
+        ymax = max(vxs, key= lambda t: t[1])[1]
+
+        # truncate to mm
+        xmin = int(xmin*1000)
+        xmax = int(xmax*1000)
+        ymin = int(ymin*1000)-10
+        ymax = int(ymax*1000)+10
+
+        #get all periferal edges
+        pes = extractPerimeterEdges(obj)
+        vxs = obj.data.vertices
+        pnts = []
+        for xscan in range(xmin,xmax,plotDX*10):
+            for e in pes:
+                print(e,vxs[e[0]].co,vxs[e[1]].co)
+                iv = mathutils.geometry.intersect_line_line_2d(Vector((float(xscan)/1000.0,float(ymin)/1000.0,0)),\
+                                                               Vector((float(xscan)/1000.0,float(ymax)/1000.0,0)),\
+                                                               vxs[e[0]].co,vxs[e[1]].co)
+                if iv:
+                     pnts.append((xscan,iv[0],iv[1]))
+
+        print(pnts)
+        f = open(self.filepath, 'w')
+        for p in pnts:
+            s = ("[%4d] %4d %4d\n")%(p[0],int(p[1]*1000)-xmin,int(p[2]*1000)-ymin)
+            f.write(s)
+        f.close()
+        return {'FINISHED'}
+
+
+    def invoke(self, context, event):
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
+
+    @classmethod
+    def poll(cls, context):
+        return context.active_object and context.active_object.type == 'MESH'
+
 class AirFoilSettings(bpy.types.PropertyGroup):
     curveTypes = [
         ("NACA", "Naca 4", "", 1),
@@ -1910,14 +1985,6 @@ class AirFoilSettings(bpy.types.PropertyGroup):
 
     ellipDis = BoolProperty(name="Eliptic Distribution", default=False)
 
-    sec1M = IntProperty(name="Section 1 % Camber percentage",min=0,max=70)
-    sec1P = IntProperty(name="Section 1 % Camber position",min=0,max=70)
-    sec2M = IntProperty(name="Section 2 % Camber percentage",min=0,max=70)
-    sec2P = IntProperty(name="Section 2 % Camber position",min=0,max=70)
-    sec2H = IntProperty(name="Section 2 % Position Height",min=0,max=70)
-    sec3M = IntProperty(name="Section 3 % Camber percentage",min=0,max=70)
-    sec3P = IntProperty(name="Section 3 % Camber position",min=0,max=70)
-
     paperSizes = [
       ("4A0","4a0","",1),
       ("2A0","2a0","",2),
@@ -1943,8 +2010,10 @@ class AirFoilSettings(bpy.types.PropertyGroup):
     panel10 = []
     panelNumber = IntProperty(name="Panel Number",min=1,max=10)
     resolution  = IntProperty(name="Resolution",min=10,max=200)
+    asciiDx = IntProperty(name="X step cm",min=1,max=100)
     steps = IntProperty(name="Loft steps",min=5,max=100)
     spans = IntProperty(name="Loft spans",min=5,max=100)
+
 
     curvePoints = []
 
