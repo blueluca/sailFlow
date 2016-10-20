@@ -37,6 +37,7 @@ Vxs = []
 FlatVxs = []
 F = []
 VxFlat = []
+flatObj = 0
 
 def extractPerimeterEdges(m):
     el = []
@@ -656,6 +657,7 @@ class Flattener(bpy.types.Operator):
     def execute(self, context):
         global Vxs
         global F
+        global flatObj
 
 
         sce = bpy.context.scene
@@ -690,23 +692,6 @@ class Flattener(bpy.types.Operator):
         for vidx in vIdxList:
             vertices.append([Vxs[vidx].co.x, Vxs[vidx].co.y, Vxs[vidx].co.z])
 
-#===============================================================================
-# # ============================================================
-#         faces = []
-#         vertices = []
-#         count = 0
-#         idx=0
-#         while F:
-#             for p in F:
-#                 faces.append([p.p1, p.p2, p.p3])
-#                 idx = idx + 1
-#                 F.remove(p)
-#         for v in Vxs:
-#             vertices.append([v.co.x, v.co.y, v.co.z])
-#
-# # =========================================================
-#===============================================================================
-
         fmesh = bpy.data.meshes.new("panel")
         fmesh.from_pydata(vertices, [], faces)
         # Update the displayed mesh with the new data
@@ -716,6 +701,7 @@ class Flattener(bpy.types.Operator):
         fobj.scale = bpy.context.active_object.scale
         scene = bpy.context.scene
         scene.objects.link(fobj)
+        flatObj = fobj
         return {'FINISHED'}
 
 class PMemorize(bpy.types.Operator):
@@ -883,6 +869,17 @@ class VIEW3D_PT_flattener_parameters(bpy.types.Panel):
     bl_category = "Sailflow Develop"
     bpy.types.Object.obj_property = bpy.props.FloatProperty(name="ObjectProperty")
 
+    def areaSelectedFaces(self,obj):
+        if type(obj) == int:
+            return 0
+        pols = obj.data.polygons
+        polsSel = [p for p in pols if p.select]
+
+        area = 0.0
+        for p in polsSel:
+            area += p.area
+        return area
+
     def draw(self, context):
         sce = bpy.context.scene
         layout = self.layout
@@ -897,6 +894,15 @@ class VIEW3D_PT_flattener_parameters(bpy.types.Panel):
 
         col = layout.column(align=True)
         col.operator("mesh.flattener")
+        box = layout.box()
+
+        areaS = self.areaSelectedFaces(bpy.context.active_object)
+        areaF = self.areaSelectedFaces(flatObj)
+
+        box.label(text="Area panel on sail m^2 =" + str(round(areaS, 5)))
+        box.label(text="Area panel flatten m^2 =" + str(round(areaF, 5)))
+        box.label(text="Total area diff   cm^2 =" + str(round((areaF-areaS)*10**4,1)))
+
 
 class VIEW3D_PT_setPanel(bpy.types.Panel):
     bl_label = "Panels"
