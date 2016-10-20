@@ -1901,29 +1901,29 @@ class outputAscii(bpy.types.Operator):
         ymin = min(vxs, key= lambda t: t[1])[1]
         ymax = max(vxs, key= lambda t: t[1])[1]
 
-        # truncate to mm
-        xmin = int(xmin*1000)
-        xmax = int(xmax*1000)
-        ymin = int(ymin*1000)-10
-        ymax = int(ymax*1000)+10
-
         #get all periferal edges
         pes = extractPerimeterEdges(obj)
         vxs = obj.data.vertices
         pnts = []
-        for xscan in range(xmin,xmax,plotDX*10):
+
+        xscan=xmin
+        while xscan <=xmax:
             for e in pes:
-                print(e,vxs[e[0]].co,vxs[e[1]].co)
-                iv = mathutils.geometry.intersect_line_line_2d(Vector((float(xscan)/1000.0,float(ymin)/1000.0,0)),\
-                                                               Vector((float(xscan)/1000.0,float(ymax)/1000.0,0)),\
+                iv = mathutils.geometry.intersect_line_line_2d(Vector((xscan,ymin-1,0)),\
+                                                               Vector((xscan,ymax+1,0)),\
                                                                vxs[e[0]].co,vxs[e[1]].co)
                 if iv:
                      pnts.append((xscan,iv[0],iv[1]))
+            xscan = xscan + plotDX/100
 
-        print(pnts)
         f = open(self.filepath, 'w')
+        f.write("---------------------------------\n")
+        f.write(("Panel %s\n")%(obj.name))
+        f.write("---------------------------------\n")
+        f.write(("minx=%2.3f max x=%2.3f, minY=%2.3f maxY=%2.3f\n")%(xmin,xmax,ymin,ymax))
+        f.write(("Coordinates %d cm at distance\n")%(plotDX))
         for p in pnts:
-            s = ("[%4d] %4d %4d\n")%(p[0],int(p[1]*1000)-xmin,int(p[2]*1000)-ymin)
+            s = ("[%2.3f] %2.3f %2.3f\n")%(p[0],p[1]-xmin,p[2]-ymin)
             f.write(s)
         f.close()
         return {'FINISHED'}
