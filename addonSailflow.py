@@ -37,7 +37,8 @@ Vxs = []
 FlatVxs = []
 F = []
 VxFlat = []
-flatObj = 0
+flatObj = None
+bpy.selection=[]
 
 def extractPerimeterEdges(m):
     el = []
@@ -75,15 +76,10 @@ def profile(x, m, p):
     return y
 
 def curveProfile(x,vxs):
-    found=False
     for i in vxs:
-        if i.x > x:
-            found = True
-            break
-    if found:
-        return i.y
-    else:
-        return 0
+        if i[0] > x:
+            return i[1]
+    return 0
 
 class MyPoly:
     l1 = 0  # p1 - p3
@@ -420,17 +416,6 @@ class enerVertex:
         self.overallmdy = self.calcEnergy()
         Vxs[self.idx].co = originalCo
         self.energy = origEnergy
-#        print("calcDeltaEnergy e,e+x,e-x,e+y,e-y ",self.idx,self.energy,self.overallpdx,self.overallmdx,self.overallpdy,self.overallmdy)
-#        print("                e,+x,-x,+y,-y     ",self.idx,self.energy,self.energy-self.overallpdx,self.energy-self.overallmdx,self.energy-self.overallpdy,self.energy-self.overallmdy)
-
-
-# =================================================================
-#             
-#             
-#             FLATTENER
-# 
-#            
-# ==================================================================            
 
 class Flattener(bpy.types.Operator):
     bl_idname = "mesh.flattener"
@@ -870,7 +855,9 @@ class VIEW3D_PT_flattener_parameters(bpy.types.Panel):
     bpy.types.Object.obj_property = bpy.props.FloatProperty(name="ObjectProperty")
 
     def areaSelectedFaces(self,obj):
-        if type(obj) == int:
+        if obj == None:
+            return 0
+        if obj.type != 'MESH':
             return 0
         pols = obj.data.polygons
         polsSel = [p for p in pols if p.select]
@@ -903,6 +890,17 @@ class VIEW3D_PT_flattener_parameters(bpy.types.Panel):
         box.label(text="Area panel flatten m^2 =" + str(round(areaF, 5)))
         box.label(text="Total area diff   cm^2 =" + str(round((areaF-areaS)*10**4,1)))
 
+class VIEW3D_PT_analyse(bpy.types.Panel):
+    bl_label = "Analyse sail"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "TOOLS"
+    bl_category = "Sailflow Develop"
+
+    def draw(self,context):
+        sce = bpy.context.scene
+        layout = self.layout
+        col = layout.column(align=True)
+        col.operator("mesh.colorit")
 
 class VIEW3D_PT_setPanel(bpy.types.Panel):
     bl_label = "Panels"
@@ -922,6 +920,36 @@ class VIEW3D_PT_setPanel(bpy.types.Panel):
 
         col = layout.column(align=True)
         col.operator("mesh.panelrec")
+
+class colorIt(bpy.types.Operator):
+    bl_idname = "mesh.colorit"
+    bl_label  = "Color selected sail"
+    bl_description = "Give color depending depth"
+
+    def execute(self, context):
+
+        if context.mode in 'MESH_EDIT':
+            bpy.ops.object.mode_set(mode='OBJECT')
+        obj = context.selected_objects[0]
+        scn = context.scene
+        maxz = max([v.co.z for v in obj.data.vertices])
+        minz = min([v.co.z for v in obj.data.vertices])
+        mesh = obj.data
+        if mesh.vertex_colors:
+            vcol_layer = mesh.vertex_colors.active
+        else:
+            vcol_layer = mesh.vertex_colors.new()
+        colors = []
+        for i in range(1,102):
+            colors.append((float(i)/100.0,1.0 - float(i)/100.0,1.0 - float(i)/100.0))
+        print(colors)
+
+        for poly in mesh.polygons:
+            for loop_index in poly.loop_indices:
+                loop_vert_index = mesh.loops[loop_index].vertex_index
+                entry = (mesh.vertices[loop_vert_index].co.z-minz)/(maxz-minz)
+                vcol_layer.data[loop_index].color = colors[int(entry*100.0)]
+        return {'FINISHED'}
 
 class DATLoad(bpy.types.Operator):
     bl_idname = "mesh.curve_load"
@@ -1310,7 +1338,7 @@ class LoftDAT(bpy.types.Operator):
     def execute (self, context):
         print("Called Loft")
         sce = context.scene
-        objs = context.selected_objects
+        objs = bpy.selection
         print(objs)
         spans = sce.sailflow_model.spans
         steps = sce.sailflow_model.steps
@@ -1352,30 +1380,17 @@ class CurveAquire(bpy.types.Operator):
         sce = bpy.context.scene
 
         points = []
-        for v in obj.data.vertices:
-            points.append(v.co)
-
-        maxx = -1000
-        minx = 1000
-        miny = 1000
-
-        for p in points:
-            if p.x < minx:
-                minx = p.x
-            elif p.x > maxx:
-                maxx = p.x
-            if p.y < miny:
-                miny = p.y
+        points = [v.co for v in obj.data.vertices]
+        minx = min([p.x for p in points])
+        maxx = max([p.x for p in points])
+        miny = min([p.z for p in points])
 
         l = maxx-minx
-
         del sce.sailflow_model.curvePoints[:]
-        p = list(points)
-        points = p
-        for v in points:
-            v.x = (v.x - minx)/l
-            v.y = (v.y - miny)/l
-            sce.sailflow_model.curvePoints.append(v)
+        sce.sailflow_model.curvePoints = []
+        for v in sorted(points,key=lambda p: p.x):
+            sce.sailflow_model.curvePoints.append(((v.x - minx)/l,(v.z - miny)/l))
+#        sce.sailflow_model.curvePoints = sorted(sce.sailflow_model.curvePoints,key=lambda p: p[0])
         return {'FINISHED'}
 
 from mathutils.geometry import interpolate_bezier
@@ -1445,9 +1460,7 @@ class BezierAquire(bpy.types.Operator):
 
         del sce.sailflow_model.curvePoints[:]
         for v in points:
-            v.x = (v.x - minx)/l
-            v.y = (v.y - miny)/l
-            sce.sailflow_model.curvePoints.append(v)
+            sce.sailflow_model.curvePoints.append(((v.x - minx)/l,(v.y - miny)/l))
         return {'FINISHED'}
 
 class LibraryLoader(bpy.types.Operator):
@@ -1911,6 +1924,22 @@ class outputAscii(bpy.types.Operator):
         pes = extractPerimeterEdges(obj)
         vxs = obj.data.vertices
         pnts = []
+        # find corners
+        corners = []
+        for e in pes:
+            for e2 in pes:
+                if (e[0] == e2[0]) or (e[0] == e2[1]):
+                    v1 = vxs[e[0]].co - vxs[e[1]].co
+                    v2 = vxs[e2[0]].co - vxs[e2[1]].co
+                    if radians(10) < v1.angle(v2) < radians(120):
+                        if not vxs[e[0]].co in corners:
+                            corners.append(vxs[e[0]].co)
+                elif (e[1] == e2[0]) or (e[1] == e2[1]):
+                    v1 = vxs[e[0]].co - vxs[e[1]].co
+                    v2 = vxs[e2[0]].co - vxs[e2[1]].co
+                    if radians(10) < v1.angle(v2) < radians(120):
+                        if not vxs[e[1]].co in corners:
+                            corners.append(vxs[e[1]].co)
 
         xscan=xmin
         while xscan <=xmax:
@@ -1926,8 +1955,11 @@ class outputAscii(bpy.types.Operator):
         f.write("---------------------------------\n")
         f.write(("Panel %s\n")%(obj.name))
         f.write("---------------------------------\n")
-        f.write(("minx=%2.3f max x=%2.3f, minY=%2.3f maxY=%2.3f\n")%(xmin,xmax,ymin,ymax))
-        f.write(("Coordinates %d cm at distance\n")%(plotDX))
+        f.write("Coordinates of the corners \n")
+        for c in corners:
+            f.write(("(%2.3f,%2.3f) ")%(c.x-xmin,c.y-ymin))
+
+        f.write(("\nCoordinates %d cm at distance\n")%(plotDX))
         for p in pnts:
             s = ("[%2.3f] %2.3f %2.3f\n")%(p[0],p[1]-xmin,p[2]-ymin)
             f.write(s)
@@ -1946,9 +1978,9 @@ class outputAscii(bpy.types.Operator):
 class AirFoilSettings(bpy.types.PropertyGroup):
     curveTypes = [
         ("NACA", "Naca 4", "", 1),
-        ("CUSTOM", "Custom Profile", "", 2),
-        ("DAT", "Lofting", "", 3),
-        ("CURVE","Bezier or Mesh","",4)
+        ("CUSTOM", "Profile on routine", "", 2),
+        ("DAT", "Load DAT and lofting", "", 3),
+        ("CURVE","Profile Bezier or Mesh","",4)
     ]
     m = IntProperty (
         name="% Max Camber",
@@ -2022,15 +2054,57 @@ class AirFoilSettings(bpy.types.PropertyGroup):
 
 
     curvePoints = []
+    curveName = bpy.props.StringProperty(name="object name")
+
+def select():
+
+    #print(bpy.context.mode)
+    if bpy.context.mode=="OBJECT":
+        obj = bpy.context.object
+        sel = len(bpy.context.selected_objects)
+
+        if sel==0:
+            bpy.selection=[]
+        else:
+            if sel==1:
+                bpy.selection=[]
+                bpy.selection.append(obj)
+            elif sel>len(bpy.selection):
+                for sobj in bpy.context.selected_objects:
+                    if (sobj in bpy.selection)==False:
+                        bpy.selection.append(sobj)
+
+            elif sel<len(bpy.selection):
+                for it in bpy.selection:
+                    if (it in bpy.context.selected_objects)==False:
+                        bpy.selection.remove(it)
+
+    #on edit mode doesnt work well
+
+#executes selection by order at 3d view
+class Selection(bpy.types.Header):
+    bl_label = "Selection"
+    bl_space_type = "VIEW_3D"
+
+    def __init__(self):
+        #print("hey")
+        select()
+
+    def draw(self, context):
+        layout = self.layout
+        row = layout.row()
+        row.label("Sel: "+str(len(bpy.selection)))
 
 def register():
     bpy.utils.register_module(__name__)
     bpy.types.Scene.sailflow_model = bpy.props.PointerProperty(type=AirFoilSettings,
                                                                name="Airfoil Model",
                                                                description="Setting of the AirFoil")
+    bpy.utils.register_class(Selection)
 
 def unregister():
     bpy.utils.unregister_module(__name__)
+    bpy.utils.unregister_class(Selection)
 
 if __name__ == "__main__":
     register()
