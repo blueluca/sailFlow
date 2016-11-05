@@ -68,6 +68,8 @@ def profile(x, m, p):
 #=====================================================================================
     if (x < 0):
         return 0
+    if (x > 1):
+        return 0
     if (x < p):
         y = (m / (p * p)) * (2 * p * x - x * x);
     else:
@@ -637,7 +639,7 @@ class Flattener(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        return context.active_object and context.active_object.type == 'MESH'
+        return context.mode == 'EDIT_MESH' and context.active_object.type == 'MESH'
 
     def execute(self, context):
         global Vxs
@@ -687,80 +689,6 @@ class Flattener(bpy.types.Operator):
         scene = bpy.context.scene
         scene.objects.link(fobj)
         flatObj = fobj
-        return {'FINISHED'}
-
-class PMemorize(bpy.types.Operator):
-    bl_idname = "mesh.panelmem"
-    bl_label = "Panel Memorize"
-    bl_description = "bla bla bla"
-
-    def execute(self,context):
-        bpy.ops.object.mode_set(mode = 'OBJECT')
-        bpy.ops.object.mode_set(mode = 'EDIT')
-
-        sce = bpy.context.scene
-        faces = bpy.context.active_object.data.polygons
-        for face in faces:
-            if face.select:
-                if sce.sailflow_model.panelNumber == 1:
-                    sce.sailflow_model.panel1.append(face.index)
-                elif sce.sailflow_model.panelNumber == 2:
-                    sce.sailflow_model.panel2.append(face.index)
-                elif sce.sailflow_model.panelNumber == 3:
-                    sce.sailflow_model.panel3.append(face.index)
-                elif sce.sailflow_model.panelNumber == 4:
-                    sce.sailflow_model.panel4.append(face.index)
-                elif sce.sailflow_model.panelNumber == 5:
-                    sce.sailflow_model.panel5.append(face.index)
-                elif sce.sailflow_model.panelNumber == 6:
-                    sce.sailflow_model.panel6.append(face.index)
-                elif sce.sailflow_model.panelNumber == 7:
-                    sce.sailflow_model.panel7.append(face.index)
-                elif sce.sailflow_model.panelNumber == 8:
-                    sce.sailflow_model.panel8.append(face.index)
-                elif sce.sailflow_model.panelNumber == 9:
-                    sce.sailflow_model.panel9.append(face.index)
-                elif sce.sailflow_model.panelNumber == 10:
-                    sce.sailflow_model.panel10.append(face.index)
-
-        return {'FINISHED'}
-
-class PRecall(bpy.types.Operator):
-    bl_idname = "mesh.panelrec"
-    bl_label = "Panel Recall"
-    bl_description = "bla bla bla"
-
-    def execute(self,context):
-        sce = bpy.context.scene
-        faces = bpy.context.active_object.data.polygons
-        bpy.ops.mesh.select_all(action='DESELECT')
-        bpy.ops.object.mode_set(mode = 'OBJECT')
-        if sce.sailflow_model.panelNumber == 1:
-            p = sce.sailflow_model.panel1
-        elif sce.sailflow_model.panelNumber == 2:
-            p = sce.sailflow_model.panel2
-        elif sce.sailflow_model.panelNumber == 3:
-            p = sce.sailflow_model.panel3
-        elif sce.sailflow_model.panelNumber == 4:
-            p = sce.sailflow_model.panel4
-        elif sce.sailflow_model.panelNumber == 5:
-            p = sce.sailflow_model.panel5
-        elif sce.sailflow_model.panelNumber == 6:
-            p = sce.sailflow_model.panel6
-        elif sce.sailflow_model.panelNumber == 7:
-            p = sce.sailflow_model.panel7
-        elif sce.sailflow_model.panelNumber == 8:
-            p = sce.sailflow_model.panel8
-        elif sce.sailflow_model.panelNumber == 9:
-            p = sce.sailflow_model.panel9
-        elif sce.sailflow_model.panelNumber == 10:
-            p = sce.sailflow_model.panel10
-
-        for fidx in p:
-            faces[fidx].select = True
-            print("set face ",fidx)
-        bpy.ops.object.mode_set(mode = 'EDIT')
-
         return {'FINISHED'}
 
 class VIEW3D_PT_airprofile_print(bpy.types.Panel):
@@ -829,11 +757,15 @@ class VIEW3D_PT_airprofile_parameters(bpy.types.Panel):
             col.prop(sce.sailflow_model,"spans")
             col = layout.column(align=True)
 
-        row = col.row(align=True)
-        row.prop(sce.sailflow_model, "twist")
-        row.prop(sce.sailflow_model, "tw")
-        row = col.row(align=True)
-        row.prop(sce.sailflow_model,"ellipDis")
+        if sce.sailflow_model.t != "DAT":
+            row = col.row(align=True)
+            row.prop(sce.sailflow_model, "twist")
+            row.prop(sce.sailflow_model, "tw")
+            row = col.row(align=True)
+            row.prop(sce.sailflow_model,"ellipDis")
+            row = col.row(align=True)
+            row.prop(sce.sailflow_model,"shrink")
+
 #
 #       col = layout.column(align=True)
         if sce.sailflow_model.t != "DAT":
@@ -901,25 +833,6 @@ class VIEW3D_PT_analyse(bpy.types.Panel):
         layout = self.layout
         col = layout.column(align=True)
         col.operator("mesh.colorit")
-
-class VIEW3D_PT_setPanel(bpy.types.Panel):
-    bl_label = "Panels"
-    bl_space_type = "VIEW_3D"
-    bl_region_type = "TOOLS"
-    bl_category = "Sailflow Design"
-
-    def draw(self, context):
-        sce = bpy.context.scene
-        layout = self.layout
-
-        col = layout.column(align=True)
-        col.prop(sce.sailflow_model,"panelNumber")
-
-        col = layout.column(align=True)
-        col.operator("mesh.panelmem")
-
-        col = layout.column(align=True)
-        col.operator("mesh.panelrec")
 
 class colorIt(bpy.types.Operator):
     bl_idname = "mesh.colorit"
@@ -1513,16 +1426,28 @@ class AirProfile(bpy.types.Operator):
         y1 = vl[e[0]].co.y
         y2 = vl[e[1]].co.y
         if (y1 == y2):
+            # Horizontal line
+            #print("gXE horizontal line")
             return(max(x1,x2))
+        elif abs(x1-x2)< 0.001:
+            # Vertical line
+            #print("gXE vert line yc=%2.2f e11[%d] el2[%d]" % (yc, e[0], e[1]))
+            return x1
         else:
-            v = mathutils.geometry.intersect_line_line_2d(Vector((x1, y1, 0)),
-                                                      Vector((x2, y2, 0)),
-                                                      Vector((-10, yc, 0)),
-                                                      Vector((+10, yc, 0)))
-            if v:
-                return v.x
-            else:
-                return 0.0
+            # v = mathutils.geometry.intersect_line_line_2d(
+            #         Vector((x1, y1, 0)),
+            #         Vector((x2, y2, 0)),
+            #         Vector((-10, yc, 0)),
+            #         Vector((+10, yc, 0)))
+            #print("gXE yc=%2.2f e11[%d] el2[%d]" % (yc, e[0], e[1]))
+            a = (y1-y2)/(x1-x2)
+            b = y2-(a*x2)
+            x = (yc-b)/a
+            return x
+            # if v:
+            #     return v.x
+            # else:
+            #     return 0.0
 
     def getEdgesCrossing(self,vl, pe, y):
         ce = []
@@ -1533,7 +1458,7 @@ class AirProfile(bpy.types.Operator):
  #           print("--->Check y=%f e0y=%f e1y=%f"%(y,vl[e[0]].co.y,vl[e[1]].co.y))
             if (vl[e[0]].co.y >= y and vl[e[1]].co.y <= y) or (vl[e[0]].co.y <= y and vl[e[1]].co.y >= y):
                 ce.append(e)
- #       print("----> finished check ce len=",len(ce))
+        #print("getEdgeCross: finished check found %d edges,scanning..."%(len(ce)))
         if len(ce) > 1:
                 minx = 100.0
                 maxx = -100.0
@@ -1541,9 +1466,17 @@ class AirProfile(bpy.types.Operator):
                     if vl[c[0]].co.x < minx:
                         minx = vl[c[0]].co.x
                         c1 = c
+                    if vl[c[1]].co.x < minx:
+                        minx = vl[c[1]].co.x
+                        c1 = c
                     if vl[c[0]].co.x > maxx:
                         maxx = vl[c[0]].co.x
                         c2 = c
+                    if vl[c[1]].co.x > maxx:
+                        maxx = vl[c[1]].co.x
+                        c2 = c
+                    #print("            : %d:(%2.2f) %d:(%2.2f)"%(c[0],vl[c[0]].co.x,c[1],vl[c[1]].co.x))
+                    #print("            : (%d,%d) minx=%2.4f maxx=%2.4f"%(c[0],c[1],minx,maxx))
         else:
             c1 = (-1, 0)
             c2 = (-1, 0)
@@ -1551,6 +1484,7 @@ class AirProfile(bpy.types.Operator):
         return (c1, c2)
 
     def extractPerimeterEdges(self,m):
+
         el = []
         perifEdgeList = []
         for p in m.data.polygons:
@@ -1565,6 +1499,7 @@ class AirProfile(bpy.types.Operator):
                 el.remove(e)
             else:
                 perifEdgeList.append(e)
+
         return perifEdgeList
 
     def makeTwist(self,a, maxTwist):
@@ -1587,7 +1522,14 @@ class AirProfile(bpy.types.Operator):
                         a.data.vertices[v.index].co.z += sin(angle) * (v.co.x - leftx)
                         a.data.vertices[v.index].co.x = cos(angle) * (v.co.x - leftx) + leftx
 
-    def camber(self,ctx=None, mp=0.1, pp=0.5, weightMode=False, profileMode=False, ctype="NACA",ellipDis=False):
+    def camber(self,ctx=None, mp=0.1, pp=0.5, weightMode=False, profileMode=False, ctype="NACA",ellipDis=False,shrink=False):
+        class localVertex:
+            def __init__(self,x,y,z,index):
+                self.x = x
+                self.newx = x
+                self.y = y
+                self.z = z
+                self.index = index
 
         sce = bpy.context.scene
         a = ctx.active_object
@@ -1597,136 +1539,69 @@ class AirProfile(bpy.types.Operator):
         for v in a.data.vertices:
             v.co.z = 0
         pe = extractPerimeterEdges(a)
-        pv = []
-        for e in pe:
-            pv.append(e[0])
-            pv.append(e[1])
-
-        miny = 100000
-        maxy = -100000
-        for v in a.data.vertices:
-            if v.co.y < miny:
-                miny = v.co.y
-            if v.co.y > maxy:
-                maxy = v.co.y
+        miny = min([v.co.y for v in a.data.vertices])
+        maxy = max([v.co.y for v in a.data.vertices])
         halfSpan  = (maxy - miny)/2
         halfSpanY = halfSpan+miny
-        print("Half span = ", halfSpan, "full=",(maxy - miny) )
-        print("miny=",miny," maxy=",maxy)
-        if ctype == 'NACA':
-            for v in a.data.vertices:
-                if True:
-                    e1, e2 = self.getEdgesCrossing(a.data.vertices, pe, v.co.y)
-                    if e1[0] != -1 and e2[0] != -1:
-                        x1 = self.getXinEdge(a.data.vertices, e1, v.co.y)
-                        x2 = self.getXinEdge(a.data.vertices, e2, v.co.y)
-                        leftx = min(x1, x2)
-                        rightx = max(x1, x2)
-                        x = (v.co.x - leftx) / (rightx - leftx+0.0001)
+
+
+        # Calculate the length of the profile by simple splitting
+        # into line pieces and summing
+        if shrink:
+            steps = 1000
+            dxf = 1.0 / float(steps)
+            yp = 0  # lets assume all profile starts from 0 at x=0
+            lineLength = 0.0
+            for x in range(1,steps):
+                xf = float(x)/float(steps)
+                y = profile(xf,mp,pp)
+                lineLength += sqrt((y -yp)*(y-yp)+dxf*dxf)
+                yp = y
+            XshrinkFactor = 1/lineLength
+        else:
+            XshrinkFactor = 1.0
+
+        verticesCopy = [localVertex(v.co.x,v.co.y,v.co.z,v.index) for v in a.data.vertices]
+        for v in verticesCopy:
+            if True:
+                e1, e2 = self.getEdgesCrossing(a.data.vertices, pe,v.y)
+                if e1[0] != -1 and e2[0] != -1:
+                    x1 = self.getXinEdge(a.data.vertices, e1, v.y)
+                    x2 = self.getXinEdge(a.data.vertices, e2, v.y)
+                    leftx = min(x1, x2)
+                    rightx = max(x1, x2)
+                    x = (v.x - leftx) / (rightx - leftx+0.0001)
+                    if ctype == 'NACA':
                         y = profile(x, mp, pp)
-                        if weightMode:
-                            if a.data.vertices[v.index].groups:
-                                print("weight=",a.data.vertices[v.index].groups[0].weight)
-                                a.data.vertices[v.index].co.z = a.data.vertices[v.index].groups[0].weight * y * (rightx - leftx)
-                            else:
-                                a.data.vertices[v.index].co.z = y * (rightx - leftx)
-                        elif profileMode:
-                            weight = self.findWeight(a.matrix_world * v.co)
-                            a.data.vertices[v.index].co.z = y * (rightx - leftx) * weight
-                        elif ellipDis:
-                            print("y=",(v.co.y-miny),"x=",x,"camber=",y)
-                            print("factor=",((v.co.y-halfSpanY)/halfSpan)**2)
-                            y = y*sqrt(1-((v.co.y-halfSpanY)/halfSpan)**2)
-                            a.data.vertices[v.index].co.z = y * (rightx - leftx)
-                        else:
-                            a.data.vertices[v.index].co.z = y * (rightx - leftx)
-
-        elif ctype == 'THREE':
-            mp = [sce.sailflow_model.sec1M/100.0,sce.sailflow_model.sec2M/100.0,sce.sailflow_model.sec3M/100.0]
-            pp = [sce.sailflow_model.sec1P/100.0,sce.sailflow_model.sec2P/100.0,sce.sailflow_model.sec3P/100.0]
-            heights = [0.0, sce.sailflow_model.sec2H/100.0, 1.0]  # Percentage, first and last 0 and 1
-            for v in a.data.vertices:
-    #            if not v.index in pv:
-    #            if True:
-                if v.co.y != 0 and v.co.x != 0:
-                    e1, e2 = self.getEdgesCrossing(a.data.vertices, pe, v.co.y)
-                    if e1[0] != -1 and e2[0] != -1:
-                        x1 = self.getXinEdge(a.data.vertices, e1, v.co.y)
-                        x2 = self.getXinEdge(a.data.vertices, e2, v.co.y)
-                        leftx = min(x1, x2)
-                        rightx = max(x1, x2)
-                        x = (v.co.x - leftx) / (rightx - leftx+0.0001)
-                        heightPerc = (v.co.y - miny) / (maxy - miny+0.0001)
-                        print("HeightPerc=",heightPerc," height")
-                        if heightPerc <= heights[1]:
-                            rmp = mp[0]+((mp[1]-mp[0])/heights[1])*heightPerc
-                            rpp = pp[0]+((pp[1]-pp[0])/heights[1])*heightPerc
-                        else:
-                            rmp = mp[1]+((mp[2]-mp[1])/heights[2])*(heightPerc-heights[1])
-                            rpp = pp[1]+((pp[2]-pp[1])/heights[2])*(heightPerc-heights[1])
-                        y = profile(x, rmp, rpp)
-                        if ellipDis:
-                            print("y=",(v.co.y-miny),"x=",x,"camber=",y)
-                            print("factor=",1-((v.co.y-halfSpanY)/halfSpan)**2)
-                            y = y*sqrt(1-((v.co.y-halfSpanY)/halfSpan)**2)
-                            a.data.vertices[v.index].co.z = y * (rightx - leftx)
-                        else:
-                            a.data.vertices[v.index].co.z = y * (rightx - leftx)
-
-        elif ctype == 'CUSTOM':
-            print("Custom profile")
-            for v in a.data.vertices:
-                if not v.index in pv:
-                    e1, e2 = self.getEdgesCrossing(a.data.vertices, pe, v.co.y)
-                    if e1[0] != -1 and e2[0] != -1:
-                        x1 = self.getXinEdge(a.data.vertices, e1, v.co.y)
-                        x2 = self.getXinEdge(a.data.vertices, e2, v.co.y)
-                        leftx = min(x1, x2)
-                        rightx = max(x1, x2)
-                        x = (v.co.x - leftx) / (rightx - leftx+0.0001)
-                        heightPerc = (v.co.y - miny) / (maxy - miny)
-                        y = custom_profile.profile(x, heightPerc,v.co.x,v.co.y,miny,maxy)
-                        if ellipDis:
-                            print("y=",(v.co.y-miny),"x=",x,"camber=",y)
-                            print("factor=",1-((v.co.y-halfSpanY)/halfSpan)**2)
-                            y = y*sqrt(1-((v.co.y-halfSpanY)/halfSpan)**2)
-                            a.data.vertices[v.index].co.z = y * (rightx - leftx)
-                        else:
-                            a.data.vertices[v.index].co.z = y * (rightx - leftx)
-
-        elif ctype == 'CURVE':
-            print("Curve profile option")
-            for v in a.data.vertices:
-                if not v.index in pv:
-                    e1, e2 = self.getEdgesCrossing(a.data.vertices, pe, v.co.y)
-                    if e1[0] != -1 and e2[0] != -1:
-                        x1 = self.getXinEdge(a.data.vertices, e1, v.co.y)
-                        x2 = self.getXinEdge(a.data.vertices, e2, v.co.y)
-                        leftx = min(x1, x2)
-                        rightx = max(x1, x2)
-                        x = (v.co.x - leftx) / (rightx - leftx+0.0001)
-                        heightPerc = (v.co.y - miny) / (maxy - miny)
+                    elif ctype == 'CURVE':
                         y = curveProfile(x, sce.sailflow_model.curvePoints)
-                        if ellipDis:
-                            print("y=",(v.co.y-miny),"x=",x,"camber=",y)
-                            print("factor=",1-((v.co.y-halfSpanY)/halfSpan)**2)
-                            y = y*sqrt(1-((v.co.y-halfSpanY)/halfSpan)**2)
-                            a.data.vertices[v.index].co.z = y * (rightx - leftx)
-                        else:
-                            a.data.vertices[v.index].co.z = y * (rightx - leftx)
+                    elif ctype == 'CUSTOM':
+                        heightPerc = (v.co.y - miny) / (maxy - miny)
+                        y = custom_profile.profile(x, heightPerc, v.co.x, v.co.y, miny, maxy)
+                    if ellipDis:
+                        y = y*sqrt(1-((v.co.y-halfSpanY)/halfSpan)**2)
+
+                    v.z = y * (rightx - leftx) * XshrinkFactor
+                    v.newx = leftx + (v.x - leftx) * XshrinkFactor
+        vs = a.data.vertices
+        for v in verticesCopy:
+            vs[v.index].co.x = v.newx
+            vs[v.index].co.z = v.z
 
     def execute(self, context):
         print("Called airprofile")
         sce = bpy.context.scene
-        self.camber(context, sce.sailflow_model.m / 100, sce.sailflow_model.p / 100, sce.sailflow_model.weight,
-                    sce.sailflow_model.curve, sce.sailflow_model.t,sce.sailflow_model.ellipDis)
+        self.camber(ctx=context, mp=sce.sailflow_model.m / 100, pp=sce.sailflow_model.p / 100,
+                    ctype=sce.sailflow_model.t,
+                    ellipDis=sce.sailflow_model.ellipDis,
+                    shrink=sce.sailflow_model.shrink)
         if sce.sailflow_model.twist:
             self.makeTwist(context.active_object, sce.sailflow_model.tw)
         return {'FINISHED'}
 
     @classmethod
     def poll(cls, context):
-        return context.active_object and context.active_object.type == 'MESH'
+        return context.active_object and context.active_object.type == 'MESH' and context.mode == 'OBJECT'
 
 class printPDF(bpy.types.Operator):
     bl_idname = "mesh.print_pdf"
@@ -1997,7 +1872,7 @@ class AirFoilSettings(bpy.types.PropertyGroup):
 
     t = EnumProperty(name="Curve",default="NACA",items=curveTypes)
 
-    weight = BoolProperty(name="Apply Weight",default=False)
+    shrink = BoolProperty(name="Apply Shrink",default=False)
     curve = BoolProperty(name="Apply Curve",default=False)
     twist = BoolProperty(name="Apply Twist",default=False)
     tw = IntProperty (name="Twist Angle",description="Value of angle", default=0,min=0,max=90)
@@ -2036,17 +1911,7 @@ class AirFoilSettings(bpy.types.PropertyGroup):
     paperFormat = bpy.props.EnumProperty (name = "Paper Size", default="A4",items=paperSizes)
     freeText = bpy.props.StringProperty (name = "Free Text", description = "Anything appearing in the PDF", default = 'free text')
     multiPages = bpy.props.BoolProperty(name="Multi pages",default=False)
-    panel1 = []
-    panel2 = []
-    panel3 = []
-    panel4 = []
-    panel5 = []
-    panel6 = []
-    panel7 = []
-    panel8 = []
-    panel9 = []
-    panel10 = []
-    panelNumber = IntProperty(name="Panel Number",min=1,max=10)
+
     resolution  = IntProperty(name="Resolution",min=10,max=200)
     asciiDx = IntProperty(name="X step cm",min=1,max=100)
     steps = IntProperty(name="Loft steps",min=5,max=100)
@@ -2100,7 +1965,7 @@ def register():
     bpy.types.Scene.sailflow_model = bpy.props.PointerProperty(type=AirFoilSettings,
                                                                name="Airfoil Model",
                                                                description="Setting of the AirFoil")
-    bpy.utils.register_class(Selection)
+#    bpy.utils.register_class(Selection)
 
 def unregister():
     bpy.utils.unregister_module(__name__)
