@@ -22,6 +22,9 @@ from bpy.types import Operator
 from fpdf import FPDF
 from mathutils import Vector, Euler, geometry
 import mathutils
+from mathutils.geometry import interpolate_bezier
+
+
 #import pydevd
 
 
@@ -691,37 +694,6 @@ class Flattener(bpy.types.Operator):
         flatObj = fobj
         return {'FINISHED'}
 
-class VIEW3D_PT_airprofile_print(bpy.types.Panel):
-    bl_label = "Printout Generation"
-    bl_space_type = "VIEW_3D"
-    bl_region_type = "TOOLS"
-    bl_category = "Sailflow Develop"
-
-    def draw(self, context):
-        sce = bpy.context.scene
-        layout = self.layout
-        col = layout.column(align=True)
-
-        col.prop(sce.sailflow_model, "paperFormat")
-        col.prop(sce.sailflow_model, "freeText")
-        col.prop(sce.sailflow_model, "multiPages")
-        col.prop(sce.sailflow_model, "margin")
-        col.prop(sce.sailflow_model, "overlap")
-
-        if sce.sailflow_model.paperFormat == 'Other':
-            col.prop(sce.sailflow_model,"paperWidth")
-            col.prop(sce.sailflow_model,"paperHeight")
-
-
-        col = layout.column(align=True)
-        col.operator("mesh.print_pdf")
-        #
-        # Print in ASCII
-        #
-        col = layout.column(align=True)
-        col.prop(sce.sailflow_model,"asciiDx")
-        col.operator("mesh.print_ascii")
-
 class VIEW3D_PT_airprofile_parameters(bpy.types.Panel):
     bl_label = "Profile Parameters"
     bl_space_type = "VIEW_3D"
@@ -744,7 +716,6 @@ class VIEW3D_PT_airprofile_parameters(bpy.types.Panel):
             col = layout.column(align=True)
 
         elif sce.sailflow_model.t == "CURVE":
-            col.operator("mesh.bezier_aquire")
             col.operator("mesh.curve_aquire")
             col = layout.column(align=True)
 
@@ -783,7 +754,7 @@ class VIEW3D_PT_flattener_parameters(bpy.types.Panel):
     bl_label = "Flattener Parameters"
     bl_space_type = "VIEW_3D"
     bl_region_type = "TOOLS"
-    bl_category = "Sailflow Develop"
+    bl_category = "Sailflow Design"
     bpy.types.Object.obj_property = bpy.props.FloatProperty(name="ObjectProperty")
 
     def areaSelectedFaces(self,obj):
@@ -822,11 +793,42 @@ class VIEW3D_PT_flattener_parameters(bpy.types.Panel):
         box.label(text="Area panel flatten m^2 =" + str(round(areaF, 5)))
         box.label(text="Total area diff   cm^2 =" + str(round((areaF-areaS)*10**4,1)))
 
+class VIEW3D_PT_airprofile_print(bpy.types.Panel):
+    bl_label = "Printout Generation"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "TOOLS"
+    bl_category = "Sailflow Design"
+
+    def draw(self, context):
+        sce = bpy.context.scene
+        layout = self.layout
+        col = layout.column(align=True)
+
+        col.prop(sce.sailflow_model, "paperFormat")
+        col.prop(sce.sailflow_model, "freeText")
+        col.prop(sce.sailflow_model, "multiPages")
+        col.prop(sce.sailflow_model, "margin")
+        col.prop(sce.sailflow_model, "overlap")
+
+        if sce.sailflow_model.paperFormat == 'Other':
+            col.prop(sce.sailflow_model,"paperWidth")
+            col.prop(sce.sailflow_model,"paperHeight")
+
+
+        col = layout.column(align=True)
+        col.operator("mesh.print_pdf")
+        #
+        # Print in ASCII
+        #
+        col = layout.column(align=True)
+        col.prop(sce.sailflow_model,"asciiDx")
+        col.operator("mesh.print_ascii")
+
 class VIEW3D_PT_analyse(bpy.types.Panel):
     bl_label = "Analyse sail"
     bl_space_type = "VIEW_3D"
     bl_region_type = "TOOLS"
-    bl_category = "Sailflow Develop"
+    bl_category = "Sailflow Design"
 
     def draw(self,context):
         sce = bpy.context.scene
@@ -1284,33 +1286,7 @@ class LoftDAT(bpy.types.Operator):
 
 class CurveAquire(bpy.types.Operator):
     bl_idname = "mesh.curve_aquire"
-    bl_label = "acquire Mesh Curve"
-    bl_description = "Generate the sail custom profile from curve"
-
-    def execute (self, context):
-        print("called acquire")
-        obj = bpy.context.active_object
-        sce = bpy.context.scene
-
-        points = []
-        points = [v.co for v in obj.data.vertices]
-        minx = min([p.x for p in points])
-        maxx = max([p.x for p in points])
-        miny = min([p.z for p in points])
-
-        l = maxx-minx
-        del sce.sailflow_model.curvePoints[:]
-        sce.sailflow_model.curvePoints = []
-        for v in sorted(points,key=lambda p: p.x):
-            sce.sailflow_model.curvePoints.append(((v.x - minx)/l,(v.z - miny)/l))
-#        sce.sailflow_model.curvePoints = sorted(sce.sailflow_model.curvePoints,key=lambda p: p[0])
-        return {'FINISHED'}
-
-from mathutils.geometry import interpolate_bezier
-
-class BezierAquire(bpy.types.Operator):
-    bl_idname = "mesh.bezier_aquire"
-    bl_label = "acquire Bezier Curve"
+    bl_label = "acquire Bezier or Mesh Curve"
     bl_description = "Generate the sail custom profile from curve"
 
     def get_points(self,sp, clean=True):
@@ -1355,25 +1331,29 @@ class BezierAquire(bpy.types.Operator):
         obj = bpy.context.active_object
         sce = bpy.context.scene
 
-        points = self.get_points(bpy.context.active_object.data.splines[0])
+        if obj.type == 'CURVE':
+            points = self.get_points(bpy.context.active_object.data.splines[0])
+            minx = min([p.x for p in points])
+            maxx = max([p.x for p in points])
+            miny = min([p.y for p in points])
+        else:
+            obj = bpy.context.active_object
+            sce = bpy.context.scene
 
-        maxx = -1000
-        minx = 1000
-        miny = 1000
+            points = [v.co for v in obj.data.vertices]
+            minx = min([p.x for p in points])
+            maxx = max([p.x for p in points])
+            miny = min([p.z for p in points])
 
-        for p in points:
-            if p.x < minx:
-                minx = p.x
-            elif p.x > maxx:
-                maxx = p.x
-            if p.y < miny:
-                miny = p.y
-
-        l = maxx-minx
+        l = maxx - minx
 
         del sce.sailflow_model.curvePoints[:]
-        for v in points:
-            sce.sailflow_model.curvePoints.append(((v.x - minx)/l,(v.y - miny)/l))
+        for v in sorted(points, key=lambda p: p.x):
+            if obj.type == 'CURVE':
+                sce.sailflow_model.curvePoints.append(((v.x - minx)/l,(v.y - miny)/l))
+            else:
+                sce.sailflow_model.curvePoints.append(((v.x - minx)/l,(v.z - miny)/l))
+
         return {'FINISHED'}
 
 class LibraryLoader(bpy.types.Operator):
@@ -1543,8 +1523,6 @@ class AirProfile(bpy.types.Operator):
         maxy = max([v.co.y for v in a.data.vertices])
         halfSpan  = (maxy - miny)/2
         halfSpanY = halfSpan+miny
-
-
         # Calculate the length of the profile by simple splitting
         # into line pieces and summing
         if shrink:
@@ -1560,7 +1538,6 @@ class AirProfile(bpy.types.Operator):
             XshrinkFactor = 1/lineLength
         else:
             XshrinkFactor = 1.0
-
         verticesCopy = [localVertex(v.co.x,v.co.y,v.co.z,v.index) for v in a.data.vertices]
         for v in verticesCopy:
             if True:
