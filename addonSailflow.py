@@ -649,10 +649,17 @@ class Flattener(bpy.types.Operator):
         global F
         global flatObj
 
-
         sce = bpy.context.scene
         # Record the selected faces
         bpy.context.active_object.update_from_editmode()
+        # Check if all selected faces are triangles
+        # before start
+        obj = bpy.context.active_object
+        polys = obj.data.polygons
+        for p in polys:
+            if p.select and len(p.vertices)>3:
+                self.report({'ERROR'},'Not all faces are triangles STOPPED')
+                return {'FINISHED'}
 
         if F:
             del F[:]
@@ -1519,6 +1526,10 @@ class AirProfile(bpy.types.Operator):
         for v in a.data.vertices:
             v.co.z = 0
         pe = extractPerimeterEdges(a)
+        vxsInPe = []
+        for e in pe:
+            vxsInPe.append(e[0])
+            vxsInPe.append(e[1])
         miny = min([v.co.y for v in a.data.vertices])
         maxy = max([v.co.y for v in a.data.vertices])
         halfSpan  = (maxy - miny)/2
@@ -1540,26 +1551,27 @@ class AirProfile(bpy.types.Operator):
             XshrinkFactor = 1.0
         verticesCopy = [localVertex(v.co.x,v.co.y,v.co.z,v.index) for v in a.data.vertices]
         for v in verticesCopy:
-            if True:
-                e1, e2 = self.getEdgesCrossing(a.data.vertices, pe,v.y)
-                if e1[0] != -1 and e2[0] != -1:
-                    x1 = self.getXinEdge(a.data.vertices, e1, v.y)
-                    x2 = self.getXinEdge(a.data.vertices, e2, v.y)
-                    leftx = min(x1, x2)
-                    rightx = max(x1, x2)
-                    x = (v.x - leftx) / (rightx - leftx+0.0001)
-                    if ctype == 'NACA':
-                        y = profile(x, mp, pp)
-                    elif ctype == 'CURVE':
-                        y = curveProfile(x, sce.sailflow_model.curvePoints)
-                    elif ctype == 'CUSTOM':
-                        heightPerc = (v.co.y - miny) / (maxy - miny)
-                        y = custom_profile.profile(x, heightPerc, v.co.x, v.co.y, miny, maxy)
-                    if ellipDis:
-                        y = y*sqrt(1-((v.co.y-halfSpanY)/halfSpan)**2)
+            e1, e2 = self.getEdgesCrossing(a.data.vertices, pe,v.y)
+            if e1[0] != -1 and e2[0] != -1:
+                x1 = self.getXinEdge(a.data.vertices, e1, v.y)
+                x2 = self.getXinEdge(a.data.vertices, e2, v.y)
+                leftx = min(x1, x2)
+                rightx = max(x1, x2)
+                x = (v.x - leftx) / (rightx - leftx+0.0001)
+                if v.index in vxsInPe:
+                    y = 0.0
+                elif ctype == 'NACA':
+                    y = profile(x, mp, pp)
+                elif ctype == 'CURVE':
+                    y = curveProfile(x, sce.sailflow_model.curvePoints)
+                elif ctype == 'CUSTOM':
+                    heightPerc = (v.co.y - miny) / (maxy - miny)
+                    y = custom_profile.profile(x, heightPerc, v.co.x, v.co.y, miny, maxy)
+                if ellipDis:
+                    y = y*sqrt(1-((v.co.y-halfSpanY)/halfSpan)**2)
 
-                    v.z = y * (rightx - leftx) * XshrinkFactor
-                    v.newx = leftx + (v.x - leftx) * XshrinkFactor
+                v.z = y * (rightx - leftx) * XshrinkFactor
+                v.newx = leftx + (v.x - leftx) * XshrinkFactor
         vs = a.data.vertices
         for v in verticesCopy:
             vs[v.index].co.x = v.newx
