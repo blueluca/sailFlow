@@ -2,7 +2,7 @@ bl_info = {
     "name": "Create Sailprofile",
     "description": "Creates a profile for a sail",
     "author": "blueluca",
-    "version": (0, 2, 3),
+    "version": (0, 2, 4),
     "blender": (2, 7, 1),
     "api": 33411,  # Not certain on the API version
     "location": "View3D > Add > Mesh > Airfoil",
@@ -24,13 +24,12 @@ from mathutils import Vector, Euler, geometry
 import mathutils
 from mathutils.geometry import interpolate_bezier
 
+# import pydevd
 
-#import pydevd
 
+# PYDEV_SOURCE_DIR = 'C:/eclipse/plugins/org.python.pydev_3.4.1.201403181715/pysrc'
 
-#PYDEV_SOURCE_DIR = 'C:/eclipse/plugins/org.python.pydev_3.4.1.201403181715/pysrc'
-
-#if sys.path.count(PYDEV_SOURCE_DIR) < 1:
+# if sys.path.count(PYDEV_SOURCE_DIR) < 1:
 #   sys.path.append(PYDEV_SOURCE_DIR)
 
 
@@ -38,10 +37,11 @@ custom_profile = None
 
 Vxs = []
 FlatVxs = []
-F = []
+Flattened = []
 VxFlat = []
 flatObj = None
-bpy.selection=[]
+bpy.selection = []
+
 
 def extractPerimeterEdges(m):
     el = []
@@ -60,15 +60,16 @@ def extractPerimeterEdges(m):
             perifEdgeList.append(e)
     return perifEdgeList
 
+
 def profile(x, m, p):
-#=====================================================================================
-# The profile calculator
-#
-# inputs
-#   x  : point in the range 0 to 1 to calculate
-#   m : camber percentage
-#   p : camber position percentage
-#=====================================================================================
+    # =====================================================================================
+    # The profile calculator
+    #
+    # inputs
+    #   x  : point in the range 0 to 1 to calculate
+    #   m : camber percentage
+    #   p : camber position percentage
+    # =====================================================================================
     if (x < 0):
         return 0
     if (x > 1):
@@ -80,24 +81,26 @@ def profile(x, m, p):
     # debug(("Profile return Z="+str(y))
     return y
 
-def curveProfile(x,vxs):
+
+def curveProfile(x, vxs):
     for i in vxs:
         if i[0] > x:
             return i[1]
     return 0
+
 
 class MyPoly:
     l1 = 0  # p1 - p3
     l2 = 0  # p1 - p2
     l3 = 0  # p2 - p3
 
-    def clockWise(self,co1, co2, co3):
+    def clockWise(self, co1, co2, co3):
         A = (co2.x - co1.x) * (co2.y + co1.y)
         A = A + (co3.x - co2.x) * (co3.y + co2.y)
         A = A + (co1.x - co3.x) * (co1.y + co3.y)
         return A > 0
 
-    def doubleCircle(self,d, R, r):
+    def doubleCircle(self, d, R, r):
         x = (d ** 2 - r ** 2 + R ** 2) / (2 * d)
         y = 0.5 * (1 / d) * sqrt(4 * (d ** 2) * (R ** 2) - (d ** 2 - r ** 2 + R ** 2) ** 2)
         return x, y
@@ -112,7 +115,7 @@ class MyPoly:
         co2 = Vxs[a2].co
         co3 = Vxs[a3].co
 
-    #    print("Init ",a1,"-",co1,a2,"-",co2,a3,"-",co3)
+        #    print("Init ",a1,"-",co1,a2,"-",co2,a3,"-",co3)
         if self.clockWise(co1, co2, co3):
             self.p1 = a1
             self.p2 = a2
@@ -143,13 +146,15 @@ class MyPoly:
         self.l3 = abs((Vxs[self.p2].co - Vxs[self.p3].co).length)
         self.idx = idx
         self.vertices = [self.p1, self.p2, self.p3]
+
     #    print("Init end ",self)
 
     def __iter__(self):
         return self
 
-    def __str__ (self):
-        return "MyPoly [" + str(self.idx) + "] " + str(self.p1) + "," + str(self.p2) + "," + str(self.p3)  # +" L:"+str(self.l1)+","+str(self.l2)+","+str(self.l3)
+    def __str__(self):
+        return "MyPoly [" + str(self.idx) + "] " + str(self.p1) + "," + str(self.p2) + "," + str(
+            self.p3)  # +" L:"+str(self.l1)+","+str(self.l2)+","+str(self.l3)
 
     def x(self, n):
         if n == 1:
@@ -217,7 +222,7 @@ class MyPoly:
     def flatAllVertices(self):
         global Vxs
 
-     #   print("    Flat start",self)
+        #   print("    Flat start",self)
         self.zeroZ()
         if self.x(1) < self.x(2):
             d = self.l2
@@ -242,7 +247,7 @@ class MyPoly:
             self.setx(1, self.l2)
             self.sety(1, 0)
 
-     #   print("    Flat end ["+str(self.idx)+ "] "+str(Vxs[self.p1].co)+str(Vxs[self.p2].co)+str(Vxs[self.p3].co))
+            #   print("    Flat end ["+str(self.idx)+ "] "+str(Vxs[self.p1].co)+str(Vxs[self.p2].co)+str(Vxs[self.p3].co))
         # debug("    L1: old="+str(self.l1)+" new=" +str((Vxs[self.p1].co - Vxs[self.p3].co).length))
         # debug("    L2: old="+str(self.l2)+" new="+str((Vxs[self.p1].co - Vxs[self.p2].co).length))
         # debug("    L3: old="+str(self.l3)+" new="+str((Vxs[self.p2].co - Vxs[self.p3].co).length))
@@ -258,43 +263,43 @@ class MyPoly:
         if a in [1, 3] and b in [1, 3]:
             return self.l1
 
-    def NEWsetToFlat(self,a,b,flatted):
+    def NEWsetToFlat(self, a, b, flatted):
         xa = self.x(a)
         ya = self.y(a)
         xb = self.x(b)
         yb = self.y(b)
-        print(self,end='')
-        print("SetToFlat (a=%d,b=%d,f=%d) xa=%2.2f,ya=%2.2f,xb=%2.2f,yb=%2.2f"%(a,b,flatted,xa,ya,xb,yb))
+        print(self, end='')
+        print("SetToFlat (a=%d,b=%d,f=%d) xa=%2.2f,ya=%2.2f,xb=%2.2f,yb=%2.2f" % (a, b, flatted, xa, ya, xb, yb))
         d = self.edgeLength(a, b)
-        ra = self.edgeLength(a,flatted)
-        rb = self.edgeLength(b,flatted)
-        print("          d=%2.2f ra=%2.2f rb=%2.2f"%(d,ra,rb))
-        k = 0.25*math.sqrt((((ra+rb)*(ra+rb)-(d*d))*(d*d-(ra-rb)*(ra-rb))))
-        x1 = 0.5*(xb+xa)+0.5*(xb-xa)*(ra*ra - rb*rb)/(d*d) + 2*(yb-ya)*k/(d*d)
-        x2 = 0.5*(xb+xa)+0.5*(xb-xa)*(ra*ra - rb*rb)/(d*d) - 2*(yb-ya)*k/(d*d)
-        y1 = 0.5*(yb+ya)+0.5*(yb-ya)*(ra*ra - rb*rb)/(d*d) - 2*(xb-xa)*k/(d*d)
-        y2 = 0.5*(yb+ya)+0.5*(yb-ya)*(ra*ra - rb*rb)/(d*d) + 2*(xb-xa)*k/(d*d)
-        print("          x1=%2.2f y1=%2.2f x2=%2.2f y2=%2.2f"%(x1,y1,x2,y2))
+        ra = self.edgeLength(a, flatted)
+        rb = self.edgeLength(b, flatted)
+        print("          d=%2.2f ra=%2.2f rb=%2.2f" % (d, ra, rb))
+        k = 0.25 * math.sqrt((((ra + rb) * (ra + rb) - (d * d)) * (d * d - (ra - rb) * (ra - rb))))
+        x1 = 0.5 * (xb + xa) + 0.5 * (xb - xa) * (ra * ra - rb * rb) / (d * d) + 2 * (yb - ya) * k / (d * d)
+        x2 = 0.5 * (xb + xa) + 0.5 * (xb - xa) * (ra * ra - rb * rb) / (d * d) - 2 * (yb - ya) * k / (d * d)
+        y1 = 0.5 * (yb + ya) + 0.5 * (yb - ya) * (ra * ra - rb * rb) / (d * d) - 2 * (xb - xa) * k / (d * d)
+        y2 = 0.5 * (yb + ya) + 0.5 * (yb - ya) * (ra * ra - rb * rb) / (d * d) + 2 * (xb - xa) * k / (d * d)
+        print("          x1=%2.2f y1=%2.2f x2=%2.2f y2=%2.2f" % (x1, y1, x2, y2))
 
-        va = Vector([xa,ya])
-        vb = Vector([xb,yb])
-        vc1 = Vector([x1,y1])
-        if self.clockWise(va,vb,vc1):
-            self.setx(flatted,x1)
-            self.sety(flatted,y1)
+        va = Vector([xa, ya])
+        vb = Vector([xb, yb])
+        vc1 = Vector([x1, y1])
+        if self.clockWise(va, vb, vc1):
+            self.setx(flatted, x1)
+            self.sety(flatted, y1)
         else:
-            self.setx(flatted,x2)
-            self.sety(flatted,y2)
+            self.setx(flatted, x2)
+            self.sety(flatted, y2)
 
-        #=======================================================================
-        # print("  p1-p3 diff %2.2f perc %2.2f"%(self.l1- (Vxs[self.p1].co - Vxs[self.p3].co).length,
-        #                                        (self.l1- (Vxs[self.p1].co - Vxs[self.p3].co).length)/self.l1),end='')
-        # print("  p1-p2 diff %2.2f perc %2.2f"%(self.l2 - (Vxs[self.p1].co - Vxs[self.p2].co).length,
-        #                                        (self.l2 - (Vxs[self.p1].co - Vxs[self.p2].co).length)/self.l2),end='')
-        # print("  p2-p3 diff %2.2f perc %2.2f"%(self.l3 - (Vxs[self.p2].co - Vxs[self.p3].co).length,
-        #                                        (self.l3 - (Vxs[self.p2].co - Vxs[self.p3].co).length)/self.l3))
-        #
-        #=======================================================================
+            # =======================================================================
+            # print("  p1-p3 diff %2.2f perc %2.2f"%(self.l1- (Vxs[self.p1].co - Vxs[self.p3].co).length,
+            #                                        (self.l1- (Vxs[self.p1].co - Vxs[self.p3].co).length)/self.l1),end='')
+            # print("  p1-p2 diff %2.2f perc %2.2f"%(self.l2 - (Vxs[self.p1].co - Vxs[self.p2].co).length,
+            #                                        (self.l2 - (Vxs[self.p1].co - Vxs[self.p2].co).length)/self.l2),end='')
+            # print("  p2-p3 diff %2.2f perc %2.2f"%(self.l3 - (Vxs[self.p2].co - Vxs[self.p3].co).length,
+            #                                        (self.l3 - (Vxs[self.p2].co - Vxs[self.p3].co).length)/self.l3))
+            #
+            # =======================================================================
 
     def setToFlat(self, master, slave, flatted):
         if self.x(master) > self.x(slave):
@@ -340,19 +345,19 @@ class MyPoly:
                 self.setx(flatted, x0 + dx1 - dx2)
                 self.sety(flatted, y0 + dy1 - dy2)
 
-    def flatten (self):
+    def flatten(self):
         global Vxs
         global VxFlat
 
-        if (self.p1 in VxFlat) and (self.p2 in VxFlat) and (self.p3 in VxFlat) :
-#            print(self.idx," already flat ")
+        if (self.p1 in VxFlat) and (self.p2 in VxFlat) and (self.p3 in VxFlat):
+            #            print(self.idx," already flat ")
             return 0
         elif (((self.p1 not in VxFlat) and (self.p2 not in VxFlat)) or
-             ((self.p1 not in VxFlat) and (self.p3 not in VxFlat)) or
-             ((self.p2 not in VxFlat) and (self.p3 not in VxFlat))):
+                  ((self.p1 not in VxFlat) and (self.p3 not in VxFlat)) or
+                  ((self.p2 not in VxFlat) and (self.p3 not in VxFlat))):
             self.flatAllVertices()
         else:
-            if  self.p3 not in VxFlat:
+            if self.p3 not in VxFlat:
                 self.setToFlat(1, 2, 3)
             elif self.p1 not in VxFlat:
                 self.setToFlat(2, 3, 1)
@@ -371,41 +376,41 @@ class MyPoly:
         else:
             return None, None
 
+
 class enerVertex:
-
-
-    def __init__(self,i):
+    def __init__(self, i):
         self.idx = i
         self.adj = []
         self.energy = 0.0
         self.evx = 0
-#        print("Create enVX ",i)
 
-    def addAdjacent(self,iandl):
+    #        print("Create enVX ",i)
+
+    def addAdjacent(self, iandl):
         if not iandl in self.adj:
             self.adj.append(iandl)
-#            print("added adj ",iandl)
+        #            print("added adj ",iandl)
 
     def calcEnergy(self):
         global Vxs
 
         self.energy = 0
-#        print("..node ",self.idx)
+        #        print("..node ",self.idx)
         for v in self.adj:
             dl = (Vxs[v[0]].co - Vxs[self.idx].co).length - v[1]
-#            print("...with ",v[0]," dl=",dl," over l=",v[1])
-            self.energy = self.energy + dl*dl/ v[1]
-#            print("...calcEnergy [",self.idx,"-",v[0],"] dl=",dl," en=",self.energy)
-#        print("...calcEnery total ", self.idx,self.energy)
+            #            print("...with ",v[0]," dl=",dl," over l=",v[1])
+            self.energy = self.energy + dl * dl / v[1]
+        #            print("...calcEnergy [",self.idx,"-",v[0],"] dl=",dl," en=",self.energy)
+        #        print("...calcEnery total ", self.idx,self.energy)
         return self.energy
 
-    def isAdjacent(self,i):
+    def isAdjacent(self, i):
         for a in self.adj:
             if a[0] == i:
                 return True
         return False
 
-    def calcDeltaEnergy(self,delta):
+    def calcDeltaEnergy(self, delta):
         global Vxs
 
         origEnergy = self.energy
@@ -422,12 +427,13 @@ class enerVertex:
         Vxs[self.idx].co = originalCo
         self.energy = origEnergy
 
+
 class Flattener(bpy.types.Operator):
     bl_idname = "mesh.flattener"
     bl_label = "Flat surface"
     bl_description = "bla bla bla"
 
-    def findAdjacentNonFlat(self, Polys, p):
+    def findAdjacentNotFlat(self, Polys, p):
         # debug("findAdj of :"+str(p),3)
         for testP in Polys:
             # debug("...checking "+str(testP),4)
@@ -439,7 +445,7 @@ class Flattener(bpy.types.Operator):
                 return testP
         return None
 
-    def updateNodesMovToGain(self,e,delta):
+    def updateNodesMovToGain(self, e, delta):
         minEnergy = min(e.overallpdx, e.overallmdx, e.overallpdy, e.overallmdy)
         if e.energy > minEnergy:
             if e.overallpdx == minEnergy:
@@ -451,7 +457,7 @@ class Flattener(bpy.types.Operator):
             else:
                 self.nodesMovToGain[e.evx] = [0, -delta, e.energy - e.overallmdy]
         else:
-            self.nodesMovToGain[e.evx] = [0,0,0.0]
+            self.nodesMovToGain[e.evx] = [0, 0, 0.0]
 
     def minimizeEnergy(self, F, maxDeformation, deltaDeformation):
         global Vxs
@@ -460,12 +466,12 @@ class Flattener(bpy.types.Operator):
         EVs = []
         self.nodesMovToGain = []
 
-        print("="*80)
-        print(" "*40,"start"," "*40)
-        print("="*80)
+        print("=" * 80)
+        print(" " * 40, "start", " " * 40)
+        print("=" * 80)
         for p in F:
             vlist = vlist + p.vertices
-        #remove duplicates
+        # remove duplicates
         vlist = list(set(vlist))
         # vlist is all the vertices of the flatten area, with no dup.
         # Build the database of vertices and their connected
@@ -489,12 +495,12 @@ class Flattener(bpy.types.Operator):
             e.evx = len(EVs)
             EVs.append(e)
         # end database build
-        #print("end database build")
+        # print("end database build")
 
         MAXCOUNT = 5000
         delta = 0.1
-        while delta >= 10**-deltaDeformation:
-            print("---------------> NEW Loop minimize delta=",delta,"minimum decrease",maxDeformation)
+        while delta >= 10 ** -deltaDeformation:
+            print("---------------> NEW Loop minimize delta=", delta, "minimum decrease", maxDeformation)
             # Build the database
             for e in EVs:
                 e.calcDeltaEnergy(delta)
@@ -506,14 +512,14 @@ class Flattener(bpy.types.Operator):
             for evIdx in range(len(EVs)):
                 e = EVs[evIdx]
                 if e.energy > maxDeformation:
-                    self.updateNodesMovToGain(e,delta)
+                    self.updateNodesMovToGain(e, delta)
                     # if the gain is higher than the threshold or the best record the node
 
-                    #if self.nodesMovToGain[evIdx][2]>0:
-                        #print("Node ",e.idx,"energy=",e.energy," dec energy=",self.nodesMovToGain[evIdx][2])
+                    # if self.nodesMovToGain[evIdx][2]>0:
+                    # print("Node ",e.idx,"energy=",e.energy," dec energy=",self.nodesMovToGain[evIdx][2])
 
                     if self.nodesMovToGain[evIdx][2] > maxGain:
-                        #print("..new max decr energy for",e.idx,"dec energy=",self.nodesMovToGain[evIdx][2])
+                        # print("..new max decr energy for",e.idx,"dec energy=",self.nodesMovToGain[evIdx][2])
                         maxGain = self.nodesMovToGain[evIdx][2]
                         maxIdx = evIdx
                         maxE = e
@@ -527,7 +533,7 @@ class Flattener(bpy.types.Operator):
             for count in range(MAXCOUNT):
                 # if there one node that can minimize energy    
                 if maxIdx:
-                    #print("Selected node ",maxE.idx,"energy=",maxE.energy," dec energy=",self.nodesMovToGain[maxE.evx][2])
+                    # print("Selected node ",maxE.idx,"energy=",maxE.energy," dec energy=",self.nodesMovToGain[maxE.evx][2])
                     # apply the change in position
                     Vxs[maxE.idx].co.x += self.nodesMovToGain[maxIdx][0]
                     Vxs[maxE.idx].co.y += self.nodesMovToGain[maxIdx][1]
@@ -535,26 +541,26 @@ class Flattener(bpy.types.Operator):
                     maxE.calcEnergy()
                     maxE.calcDeltaEnergy(delta)
                     # update the database of nodeMovToGain for the winning vertex       
-                    self.updateNodesMovToGain(maxE,delta)
-                    #print("..updating database for adjacent")
+                    self.updateNodesMovToGain(maxE, delta)
+                    # print("..updating database for adjacent")
                     for ev in EVs:
                         if maxE.isAdjacent(ev.idx):
-                            #print("... update",ev.idx)
+                            # print("... update",ev.idx)
                             ev.calcEnergy()
                             if ev.energy > maxDeformation:
                                 ev.calcDeltaEnergy(delta)
-                                self.updateNodesMovToGain(ev,delta)
+                                self.updateNodesMovToGain(ev, delta)
                             else:
-                                self.nodesMovToGain[ev.evx] = [0.0,0.0,0.0]
+                                self.nodesMovToGain[ev.evx] = [0.0, 0.0, 0.0]
 
                     maxIdx = None
                     maxGain = maxDeformation
-                    #print("scanning database again")
+                    # print("scanning database again")
                     for evIdx in range(len(EVs)):
                         nmtg = self.nodesMovToGain[evIdx]
                         e = EVs[evIdx]
-                        #if nmtg[2] > 0:
-                            #print("..node ",EVs[evIdx].idx,nmtg)
+                        # if nmtg[2] > 0:
+                        # print("..node ",EVs[evIdx].idx,nmtg)
                         if nmtg[2] > maxGain:
                             maxGain = nmtg[2]
                             maxIdx = evIdx
@@ -562,81 +568,62 @@ class Flattener(bpy.types.Operator):
                 else:
                     # no more improvement exit the loop
                     break
-                # if maxIdx
+                    # if maxIdx
             # for count in range(MAXCOUNT):
 
             # decrease the movement step and repeat   
             delta = delta / 10
 
-        maxRE=0
-        idx=0
+        maxRE = 0
+        idx = 0
         for e in EVs:
             if e.energy > maxRE:
                 maxRE = e.energy
                 idx = e.idx
-        print("exit minimize energy, max residual energy node=",idx," energy=",maxRE)
+        print("exit minimize energy, max residual energy node=", idx, " energy=", maxRE)
         return maxRE
 
-    def makeItFlat(self, obj, energyMinimizer, maxDeformation, deltaDeformation,polSeed):
-        # Variables
-        #
-        # V available polygons
-        # A active polygons
-        # F flatten polygons
-        # vt face of the available
-        # ft is vt flatten version
-        # at temporary active polygon
-
+    def makeFlattened(self, obj, energyMinimizer, maxDeformation, deltaDeformation, polSeed):
         global Vxs
-        global F
+        global Flattened
         global VxFlat
 
-        A = []
-        V = []
+        Adjacents = []
+        ToBeFlattened = []
         Vxs = []
         VxFlat = []
         me = obj.data
         Vxs = me.vertices[:]
-        count = 0
-#        pydevd.settrace(stdoutToServer=True, stderrToServer=True, suspend=True)
-        s = None
         for p in me.polygons:
             if p.select:
-                vt = MyPoly(p, idx=p.index)
-                V.append(vt)
+                ToBeFlattened.append(MyPoly(p, idx=p.index))
 
         if polSeed != -1:
-            for vt in V:
-                if vt.idx == polSeed:
-                    A.append(vt)
-                    V.remove(vt)
-                    break;
+            for poly in ToBeFlattened:
+                if poly.idx == polSeed:
+                    Adjacents.append(poly)
+                    ToBeFlattened.remove(poly)
+                    break
 
-        while V or A:
-            if A:
-                s = A.pop(0)
+        while ToBeFlattened or Adjacents:
+            if Adjacents:
+                poly = Adjacents.pop(0)
             else:
-                s = V.pop()
-#                print("==============================restart from ",s.idx)
+                poly = ToBeFlattened.pop()
             # Collect all the adjacent triangle
             # and put it in Active collection "A"
-            found = True
-            while(found):
-                at = self.findAdjacentNonFlat(V, s)
-                if at:
-#                    print("..adj is",at.idx)
-                    A.append(at)
-                    V.remove(at)
-                    found = True
+            while 1:
+                adjPoly = self.findAdjacentNotFlat(ToBeFlattened, poly)
+                if adjPoly:
+                    Adjacents.append(adjPoly)
+                    ToBeFlattened.remove(adjPoly)
                 else:
-                    found = False
-#            print(count," Flattening: " + str(s))
-            count += 1
-            s.flatten()
-            F.append(s)
+                    break
+            poly.flatten()
+            Flattened.append(poly)
 
         if energyMinimizer:
-            return(self.minimizeEnergy(F, maxDeformation, deltaDeformation))
+            return (self.minimizeEnergy(Flattened, maxDeformation, deltaDeformation))
         else:
             return 0
 
@@ -646,7 +633,7 @@ class Flattener(bpy.types.Operator):
 
     def execute(self, context):
         global Vxs
-        global F
+        global Flattened
         global flatObj
 
         sce = bpy.context.scene
@@ -657,31 +644,37 @@ class Flattener(bpy.types.Operator):
         obj = bpy.context.active_object
         polys = obj.data.polygons
         for p in polys:
-            if p.select and len(p.vertices)>3:
-                self.report({'ERROR'},'Not all faces are triangles STOPPED')
+            if p.select and len(p.vertices) > 3:
+                self.report({'ERROR'}, 'Not all faces are triangles STOPPED')
                 return {'FINISHED'}
 
-        if F:
-            del F[:]
+        if Flattened:
+            del Flattened[:]
 
         if sce.sailflow_model.useSeed == False:
-            self.makeItFlat(bpy.context.active_object, sce.sailflow_model.energyMinimizer, sce.sailflow_model.maxDeformation,
-                            sce.sailflow_model.deltaDeformation,-1)
+            sce.sailflow_model.resEnergy =self.makeFlattened(bpy.context.active_object,
+                                                             sce.sailflow_model.energyMinimizer,
+                                                             sce.sailflow_model.maxDeformation,
+                                                             sce.sailflow_model.deltaDeformation,
+                                                             -1)
         else:
-            sce.sailflow_model.resEnergy = self.makeItFlat(bpy.context.active_object, sce.sailflow_model.energyMinimizer, sce.sailflow_model.maxDeformation,
-                                            sce.sailflow_model.deltaDeformation,sce.sailflow_model.polSeed)
+            sce.sailflow_model.resEnergy = self.makeFlattened(bpy.context.active_object,
+                                                              sce.sailflow_model.energyMinimizer,
+                                                              sce.sailflow_model.maxDeformation,
+                                                              sce.sailflow_model.deltaDeformation,
+                                                              sce.sailflow_model.polSeed)
         # Complet list of vertices used
         vIdxList = []
         faces = []
         vertices = []
-        for p in F:
+        for p in Flattened:
             vIdxList.append(p.p1)
             vIdxList.append(p.p2)
             vIdxList.append(p.p3)
         vIdxList.sort()
         # The following remove duplicates
         vIdxList = list(set(vIdxList))
-        for p in F:
+        for p in Flattened:
             p.p1 = vIdxList.index(p.p1)
             p.p2 = vIdxList.index(p.p2)
             p.p3 = vIdxList.index(p.p3)
@@ -694,12 +687,14 @@ class Flattener(bpy.types.Operator):
         # Update the displayed mesh with the new data
         fmesh.update()
         fobj = bpy.data.objects.new("panel", fmesh)
-#        fobj.matrix_world = bpy.context.active_object.matrix_world
+        #        fobj.matrix_world = bpy.context.active_object.matrix_world
         fobj.scale = bpy.context.active_object.scale
         scene = bpy.context.scene
         scene.objects.link(fobj)
+        fobj.location = Vector([0,0,0])
         flatObj = fobj
         return {'FINISHED'}
+
 
 class VIEW3D_PT_airprofile_parameters(bpy.types.Panel):
     bl_label = "Profile Parameters"
@@ -728,11 +723,11 @@ class VIEW3D_PT_airprofile_parameters(bpy.types.Panel):
 
         elif sce.sailflow_model.t == "DAT":
             col.operator("mesh.curve_load")
-            col.prop(sce.sailflow_model,"resolution")
+            col.prop(sce.sailflow_model, "resolution")
             col = layout.column(align=True)
             col.operator("mesh.loft")
-            col.prop(sce.sailflow_model,"steps")
-            col.prop(sce.sailflow_model,"spans")
+            col.prop(sce.sailflow_model, "steps")
+            col.prop(sce.sailflow_model, "spans")
             col = layout.column(align=True)
 
         if sce.sailflow_model.t != "DAT":
@@ -740,12 +735,16 @@ class VIEW3D_PT_airprofile_parameters(bpy.types.Panel):
             row.prop(sce.sailflow_model, "twist")
             row.prop(sce.sailflow_model, "tw")
             row = col.row(align=True)
-            row.prop(sce.sailflow_model,"ellipDis")
+            row.prop(sce.sailflow_model, "ellipDis")
             row = col.row(align=True)
-            row.prop(sce.sailflow_model,"shrink")
+            row.prop(sce.sailflow_model, "ellipAmount")
+            row = col.row(align=True)
+            row.prop(sce.sailflow_model, "ellipCenter")
+            row = col.row(align=True)
+            row.prop(sce.sailflow_model, "shrink")
 
-#
-#       col = layout.column(align=True)
+        #
+        #       col = layout.column(align=True)
         if sce.sailflow_model.t != "DAT":
             col.label(text="Operation:")
             col.operator("mesh.airprof")
@@ -757,6 +756,7 @@ class VIEW3D_PT_airprofile_parameters(bpy.types.Panel):
             box.label(text="Angle in  " + str(round(angleIn, 2)))
             box.label(text="Angle out " + str(round(angleOut, 2)))
 
+
 class VIEW3D_PT_flattener_parameters(bpy.types.Panel):
     bl_label = "Flattener Parameters"
     bl_space_type = "VIEW_3D"
@@ -764,7 +764,7 @@ class VIEW3D_PT_flattener_parameters(bpy.types.Panel):
     bl_category = "Sailflow Design"
     bpy.types.Object.obj_property = bpy.props.FloatProperty(name="ObjectProperty")
 
-    def areaSelectedFaces(self,obj):
+    def areaSelectedFaces(self, obj):
         if obj == None:
             return 0
         if obj.type != 'MESH':
@@ -782,12 +782,12 @@ class VIEW3D_PT_flattener_parameters(bpy.types.Panel):
         layout = self.layout
         col = layout.column(align=True)
 
-        col.prop(sce.sailflow_model,"energyMinimizer")
-        col.prop(sce.sailflow_model,"deltaDeformation")
-        col.prop(sce.sailflow_model,"maxDeformation")
-        col.prop(sce.sailflow_model,"useSeed")
-        col.prop(sce.sailflow_model,"polSeed")
-        col.prop(sce.sailflow_model,"resEnergy")
+        col.prop(sce.sailflow_model, "energyMinimizer")
+        col.prop(sce.sailflow_model, "deltaDeformation")
+        col.prop(sce.sailflow_model, "maxDeformation")
+        col.prop(sce.sailflow_model, "useSeed")
+        col.prop(sce.sailflow_model, "polSeed")
+        col.prop(sce.sailflow_model, "resEnergy")
 
         col = layout.column(align=True)
         col.operator("mesh.flattener")
@@ -798,7 +798,8 @@ class VIEW3D_PT_flattener_parameters(bpy.types.Panel):
 
         box.label(text="Area panel on sail m^2 =" + str(round(areaS, 5)))
         box.label(text="Area panel flatten m^2 =" + str(round(areaF, 5)))
-        box.label(text="Total area diff   cm^2 =" + str(round((areaF-areaS)*10**4,1)))
+        box.label(text="Total area diff   cm^2 =" + str(round((areaF - areaS) * 10 ** 4, 1)))
+
 
 class VIEW3D_PT_airprofile_print(bpy.types.Panel):
     bl_label = "Printout Generation"
@@ -818,9 +819,8 @@ class VIEW3D_PT_airprofile_print(bpy.types.Panel):
         col.prop(sce.sailflow_model, "overlap")
 
         if sce.sailflow_model.paperFormat == 'Other':
-            col.prop(sce.sailflow_model,"paperWidth")
-            col.prop(sce.sailflow_model,"paperHeight")
-
+            col.prop(sce.sailflow_model, "paperWidth")
+            col.prop(sce.sailflow_model, "paperHeight")
 
         col = layout.column(align=True)
         col.operator("mesh.print_pdf")
@@ -828,8 +828,9 @@ class VIEW3D_PT_airprofile_print(bpy.types.Panel):
         # Print in ASCII
         #
         col = layout.column(align=True)
-        col.prop(sce.sailflow_model,"asciiDx")
+        col.prop(sce.sailflow_model, "asciiDx")
         col.operator("mesh.print_ascii")
+
 
 class VIEW3D_PT_analyse(bpy.types.Panel):
     bl_label = "Analyse sail"
@@ -837,15 +838,16 @@ class VIEW3D_PT_analyse(bpy.types.Panel):
     bl_region_type = "TOOLS"
     bl_category = "Sailflow Design"
 
-    def draw(self,context):
+    def draw(self, context):
         sce = bpy.context.scene
         layout = self.layout
         col = layout.column(align=True)
         col.operator("mesh.colorit")
 
+
 class colorIt(bpy.types.Operator):
     bl_idname = "mesh.colorit"
-    bl_label  = "Color selected sail"
+    bl_label = "Color selected sail"
     bl_description = "Give color depending depth"
 
     def execute(self, context):
@@ -862,25 +864,26 @@ class colorIt(bpy.types.Operator):
         else:
             vcol_layer = mesh.vertex_colors.new()
         colors = []
-        for i in range(1,102):
-            colors.append((float(i)/100.0,1.0 - float(i)/100.0,1.0 - float(i)/100.0))
+        for i in range(1, 102):
+            colors.append((float(i) / 100.0, 1.0 - float(i) / 100.0, 1.0 - float(i) / 100.0))
         print(colors)
 
         for poly in mesh.polygons:
             for loop_index in poly.loop_indices:
                 loop_vert_index = mesh.loops[loop_index].vertex_index
-                entry = (mesh.vertices[loop_vert_index].co.z-minz)/(maxz-minz)
-                vcol_layer.data[loop_index].color = colors[int(entry*100.0)]
+                entry = (mesh.vertices[loop_vert_index].co.z - minz) / (maxz - minz)
+                vcol_layer.data[loop_index].color = colors[int(entry * 100.0)]
         return {'FINISHED'}
+
 
 class DATLoad(bpy.types.Operator):
     bl_idname = "mesh.curve_load"
-    bl_label  = "Load airfoil data as mesh"
+    bl_label = "Load airfoil data as mesh"
     bl_description = "create mesh from airfoils coordinates"
 
     filepath = bpy.props.StringProperty(subtype="FILE_PATH")
 
-    def createMesh(self,objname, Vert, Edges=[], Faces=[]):
+    def createMesh(self, objname, Vert, Edges=[], Faces=[]):
         """Helper Function to Create Meshes"""
         me = bpy.data.meshes.new(objname)
         ob = bpy.data.objects.new(objname, me)
@@ -889,7 +892,7 @@ class DATLoad(bpy.types.Operator):
         me.from_pydata(Vert, Edges, Faces)
         me.update(calc_edges=True)
 
-    def CubicInterpolate(self,y0, y1, y2, y3, mu):
+    def CubicInterpolate(self, y0, y1, y2, y3, mu):
         mu2 = mu * mu
         a0 = -0.5 * y0 + 1.5 * y1 - 1.5 * y2 + 0.5 * y3
         a1 = y0 - 2.5 * y1 + 2 * y2 - 0.5 * y3
@@ -912,7 +915,6 @@ class DATLoad(bpy.types.Operator):
         # Ensure the First point is not the Point Count that some DAT files include
 
         if RawPoints[0][0] > 1: RawPoints.remove(RawPoints[0])
-
         """Process to divide the foildata to upper and lower sections"""
         FoilGrad = [(RawPoints[i][0] - RawPoints[i + 1][0]) for i in range(len(RawPoints) - 1)]
 
@@ -929,8 +931,7 @@ class DATLoad(bpy.types.Operator):
                 else:
                     splitloc = i
                 break
-
-                # Split the airfoil along chord
+        # Split the airfoil along chord
         upper = RawPoints[:splitloc + 1]
         x = []
         y = []
@@ -958,14 +959,19 @@ class DATLoad(bpy.types.Operator):
 
         iy = []
         ix = []
-        if Resolution<len(x):
+        if Resolution < len(x):
             Resolution = len(x)
-        numpoints = int(Resolution / (len(x) - 1))
-        for idx in range(2, len(y) - 2):
+        numpoints = int(Resolution / (len(x)-1))
+        for idx in range(1, len(y) - 2):
             for pp in range(0, numpoints):
                 ppx = float(pp) / numpoints
                 iy.append(self.CubicInterpolate(y[idx - 1], y[idx], y[idx + 1], y[idx + 2], ppx))
                 ix.append(x[idx] + (x[idx + 1] - x[idx]) * ppx)
+        # idx = len(y)-1
+        # for pp in range(0, numpoints):
+        #     ppx = float(pp) / numpoints
+        #     iy.append(self.CubicInterpolate(y[idx - 3], y[idx-2], y[idx-1], y[idx], ppx))
+        # ix.append(x[idx] - (x[idx-1] - x[idx]) * ppx)
 
         return (ix, iy, RawPoints)
 
@@ -977,9 +983,11 @@ class DATLoad(bpy.types.Operator):
         InterpX, InterpY, RawPoints = self.upload(self.filepath, Resolution=sce.sailflow_model.resolution)
 
         verts = [(InterpX[idx], 0, InterpY[idx]) for idx in range(0, len(InterpX) - 1)]
+        for i,v in enumerate(verts):
+            print (i,v)
         # if the point 0 is not there we must create it.
-#        if (min(InterpX) > 0.0) and (min(InterpY) > 0.0):
-#            verts.insert(0, (0, 0, 0))
+        #if (min(InterpX) > 0.0) and (min(InterpY) > 0.0):
+        #   verts.insert(0, (0, 0, 0))
 
         edges = []
         for i in range(1, len(verts)):
@@ -993,17 +1001,18 @@ class DATLoad(bpy.types.Operator):
         context.window_manager.fileselect_add(self)
         return {'RUNNING_MODAL'}
 
+
 class LoftDAT(bpy.types.Operator):
     bl_idname = "mesh.loft"
-    bl_label  = "Loft curves or meshes"
+    bl_label = "Loft curves or meshes"
     bl_description = "Loft between mesh or curves"
 
+    @staticmethod
+    def cubic(p, t):
+        return p[0] * (1.0 - t) ** 3.0 + 3.0 * p[1] * t * (1.0 - t) ** 2.0 \
+               + 3.0 * p[2] * (t ** 2.0) * (1.0 - t) + p[3] * t ** 3.0
 
-    def cubic(self,p, t):
-        return p[0] * (1.0 - t) ** 3.0 + 3.0 * p[1] * t * (1.0 - t) ** 2.0 + 3.0 * p[2] * (t ** 2.0) * (1.0 - t) + p[
-                                                                                                                       3] * t ** 3.0
-
-    def getbezpoints(self,spl, mt, seg=0):
+    def getbezpoints(self, spl, mt, seg=0):
         points = spl.bezier_points
         p0 = mt * points[seg].co
         p1 = mt * points[seg].handle_right
@@ -1011,7 +1020,7 @@ class LoftDAT(bpy.types.Operator):
         p3 = mt * points[seg + 1].co
         return p0, p1, p2, p3
 
-    def getnurbspoints(self,spl, mw):
+    def getnurbspoints(self, spl, mw):
         pts = []
         ws = []
         for p in spl.points:
@@ -1020,7 +1029,7 @@ class LoftDAT(bpy.types.Operator):
             ws.append(p.weight)
         return pts, ws
 
-    def knots(self,n, order, type=0):  # 0 uniform 1 endpoints 2 bezier
+    def knots(self, n, order, type=0):  # 0 uniform 1 endpoints 2 bezier
 
         kv = []
 
@@ -1055,7 +1064,7 @@ class LoftDAT(bpy.types.Operator):
 
         return kv
 
-    def B(self,i, k, t, knots):
+    def B(self, i, k, t, knots):
         ret = 0
         if k > 0:
             n1 = (t - knots[i]) * self.B(i, k - 1, t, knots)
@@ -1079,7 +1088,7 @@ class LoftDAT(bpy.types.Operator):
                 ret = 0
         return ret
 
-    def C(self,t, order, points, weights, knots):
+    def C(self, t, order, points, weights, knots):
         # c = Point([0,0,0])
         c = Vector()
         rational = 0
@@ -1093,18 +1102,20 @@ class LoftDAT(bpy.types.Operator):
 
         return c * (1.0 / rational)
 
-    def calct(self,obj, t):
+    # Return the coordinate of a point at t percentage
+    # of the entire line
+    def calct(self, obj, t):
 
         if obj.type == 'CURVE':
             spl = None
             mw = obj.matrix_world
-            if obj.data.splines.active == None:
+            if obj.data.splines.active is None:
                 if len(obj.data.splines) > 0:
                     spl = obj.data.splines[0]
             else:
                 spl = obj.data.splines.active
 
-            if spl == None:
+            if spl is None:
                 return False
 
             if spl.type == "BEZIER":
@@ -1121,7 +1132,7 @@ class LoftDAT(bpy.types.Operator):
 
                 p = self.getbezpoints(spl, mw, seg)
 
-                coord = self.cubic(p, t1)
+                coord = self.cubic(p,t1)
                 return coord
 
             elif spl.type == "NURBS":
@@ -1144,20 +1155,21 @@ class LoftDAT(bpy.types.Operator):
             vidx = int(vNum * t)
             t1 = vNum * t - int(vNum * t)
             print(
-            "CALCT: The object", obj.name, " has num vertices=", vNum, ' index calculated is=', vidx, "with a t=", t,
-            "and t1=", t1)
+                "CALCT: The object", obj.name, " has num vertices=", vNum, ' index calculated is=', vidx, "with a t=",
+                t,
+                "and t1=", t1)
             if vidx == 0:
                 coord = mw * (
-                (obj.data.vertices[vidx + 1].co - obj.data.vertices[vidx].co) * t1 + obj.data.vertices[vidx].co)
+                    (obj.data.vertices[vidx + 1].co - obj.data.vertices[vidx].co) * t1 + obj.data.vertices[vidx].co)
             else:
                 coord = mw * (
-                (obj.data.vertices[vidx].co - obj.data.vertices[vidx - 1].co) * t1 + obj.data.vertices[vidx - 1].co)
+                    (obj.data.vertices[vidx].co - obj.data.vertices[vidx - 1].co) * t1 + obj.data.vertices[vidx - 1].co)
             print("CALCT: returning the coordinate", coord)
             return coord
         else:
             assert false
 
-    def intc(self,objs, i, t, tr, tipo=3, tension=0.0, bias=0.0):
+    def intc(self, objs, i, t, tr, tipo=3, tension=0.0, bias=0.0):
 
         ncurves = len(objs)
 
@@ -1222,7 +1234,7 @@ class LoftDAT(bpy.types.Operator):
 
             return a0 * p1 + a1 * m0 + a2 * m1 + a3 * p2
 
-    def intl(self,objs, i, t, tr):
+    def intl(self, objs, i, t, tr):
         p1 = self.calct(objs[i], t)
         p2 = self.calct(objs[i + 1], t)
 
@@ -1230,17 +1242,18 @@ class LoftDAT(bpy.types.Operator):
 
         return r
 
-    def loft(self,objs, steps, spans, interpolation=1, tension=0.0, bias=0.5):
+    def loft(self, objs, steps, spans, interpolation=0, tension=0.0, bias=0.5):
         verts = []
 
+        # for each object
         for i in range(0, len(objs)):
-            print("LOFT: object loop taking", objs[i].name)
-
+            # For each step
             for j in range(0, steps + 1):
-                print("LOFT: steps loop")
+                # t = percentage of steps according to j
                 t = 1.0 * j / steps
+                # verts filled in with the coordinate at the
+                # point t of the curve
                 verts.append(self.calct(objs[i], t))
-                print("loft 1st loop appended ", self.calct(objs[i], t))
 
             temp2 = []
             if i < len(objs) - 1:
@@ -1249,7 +1262,7 @@ class LoftDAT(bpy.types.Operator):
                     for k in range(0, steps + 1):
                         t = 1.0 * k / steps
                         if interpolation:
-                            pos = self.intc(objs, i, t, tr, interpolation, tension, bias)
+                            pos = self.intc(objs, i, t, tr, tipo=interpolation, tension=tension, bias=bias)
                         else:
                             pos = self.intl(objs, i, t, tr)
 
@@ -1257,7 +1270,7 @@ class LoftDAT(bpy.types.Operator):
                 verts.extend(temp2)
         return verts
 
-    def execute (self, context):
+    def execute(self, context):
         print("Called Loft")
         sce = context.scene
         objs = bpy.selection
@@ -1265,7 +1278,7 @@ class LoftDAT(bpy.types.Operator):
         spans = sce.sailflow_model.spans
         steps = sce.sailflow_model.steps
 
-        intype = 1  # no interpolation
+        intype = 2  # no interpolation
 
         verts = self.loft(objs, steps, spans, intype)
 
@@ -1291,12 +1304,13 @@ class LoftDAT(bpy.types.Operator):
 
         return {'FINISHED'}
 
+
 class CurveAquire(bpy.types.Operator):
     bl_idname = "mesh.curve_aquire"
     bl_label = "acquire Bezier or Mesh Curve"
     bl_description = "Generate the sail custom profile from curve"
 
-    def get_points(self,sp, clean=True):
+    def get_points(self, sp, clean=True):
 
         knots = sp.bezier_points
         if len(knots) < 2:
@@ -1327,13 +1341,13 @@ class CurveAquire(bpy.types.Operator):
         # some clean up to remove consecutive doubles, this could be smarter...
         if clean:
             old = master_point_list
-            good = [v for i, v in enumerate(old[:-1]) if not old[i] == old[i+1]]
+            good = [v for i, v in enumerate(old[:-1]) if not old[i] == old[i + 1]]
             good.append(old[-1])
             return good
 
         return master_point_list
 
-    def execute (self, context):
+    def execute(self, context):
         print("called acquire")
         obj = bpy.context.active_object
         sce = bpy.context.scene
@@ -1357,25 +1371,25 @@ class CurveAquire(bpy.types.Operator):
         del sce.sailflow_model.curvePoints[:]
         for v in sorted(points, key=lambda p: p.x):
             if obj.type == 'CURVE':
-                sce.sailflow_model.curvePoints.append(((v.x - minx)/l,(v.y - miny)/l))
+                sce.sailflow_model.curvePoints.append(((v.x - minx) / l, (v.y - miny) / l))
             else:
-                sce.sailflow_model.curvePoints.append(((v.x - minx)/l,(v.z - miny)/l))
+                sce.sailflow_model.curvePoints.append(((v.x - minx) / l, (v.z - miny) / l))
 
         return {'FINISHED'}
+
 
 class LibraryLoader(bpy.types.Operator):
     bl_idname = "mesh.load_library"
     bl_label = "Load profiler"
     bl_description = "Generate the sail custom profile"
 
-
     filepath = bpy.props.StringProperty(subtype="FILE_PATH")
 
     def execute(self, context):
         global custom_profile
-        print("File Path: ",self.filepath)
+        print("File Path: ", self.filepath)
 
-        custom_profile = imp.load_source('custom_profile',self.filepath)
+        custom_profile = imp.load_source('custom_profile', self.filepath)
         return {'FINISHED'}
 
     def invoke(self, context, event):
@@ -1386,12 +1400,13 @@ class LibraryLoader(bpy.types.Operator):
     def poll(cls, context):
         return context.active_object and context.active_object.type == 'MESH'
 
+
 class AirProfile(bpy.types.Operator):
     bl_idname = "mesh.airprof"
     bl_label = "Generate Profile"
     bl_description = "Generate the sail profile"
 
-    def findWeight(self,v):
+    def findWeight(self, v):
 
         vco = v
         vpco = []
@@ -1405,20 +1420,20 @@ class AirProfile(bpy.types.Operator):
                 minim = abs(vco.y - vp.y)
                 vpMin = vp
             vpzl.append(vp.z)
-        return(vpMin.z - min(vpzl)) / (max(vpzl) - min(vpzl))
+        return (vpMin.z - min(vpzl)) / (max(vpzl) - min(vpzl))
 
-    def getXinEdge(self,vl, e, yc):
+    def getXinEdge(self, vl, e, yc):
         x1 = vl[e[0]].co.x
         x2 = vl[e[1]].co.x
         y1 = vl[e[0]].co.y
         y2 = vl[e[1]].co.y
         if (y1 == y2):
             # Horizontal line
-            #print("gXE horizontal line")
-            return(max(x1,x2))
-        elif abs(x1-x2)< 0.001:
+            # print("gXE horizontal line")
+            return (max(x1, x2))
+        elif abs(x1 - x2) < 0.001:
             # Vertical line
-            #print("gXE vert line yc=%2.2f e11[%d] el2[%d]" % (yc, e[0], e[1]))
+            # print("gXE vert line yc=%2.2f e11[%d] el2[%d]" % (yc, e[0], e[1]))
             return x1
         else:
             # v = mathutils.geometry.intersect_line_line_2d(
@@ -1426,51 +1441,51 @@ class AirProfile(bpy.types.Operator):
             #         Vector((x2, y2, 0)),
             #         Vector((-10, yc, 0)),
             #         Vector((+10, yc, 0)))
-            #print("gXE yc=%2.2f e11[%d] el2[%d]" % (yc, e[0], e[1]))
-            a = (y1-y2)/(x1-x2)
-            b = y2-(a*x2)
-            x = (yc-b)/a
+            # print("gXE yc=%2.2f e11[%d] el2[%d]" % (yc, e[0], e[1]))
+            a = (y1 - y2) / (x1 - x2)
+            b = y2 - (a * x2)
+            x = (yc - b) / a
             return x
             # if v:
             #     return v.x
             # else:
             #     return 0.0
 
-    def getEdgesCrossing(self,vl, pe, y):
+    def getEdgesCrossing(self, vl, pe, y):
         ce = []
         c1 = (-1, 0)
         c2 = (-1, 0)
 
         for e in pe:
- #           print("--->Check y=%f e0y=%f e1y=%f"%(y,vl[e[0]].co.y,vl[e[1]].co.y))
+            #           print("--->Check y=%f e0y=%f e1y=%f"%(y,vl[e[0]].co.y,vl[e[1]].co.y))
             if (vl[e[0]].co.y >= y and vl[e[1]].co.y <= y) or (vl[e[0]].co.y <= y and vl[e[1]].co.y >= y):
                 ce.append(e)
-        #print("getEdgeCross: finished check found %d edges,scanning..."%(len(ce)))
+        # print("getEdgeCross: finished check found %d edges,scanning..."%(len(ce)))
         if len(ce) > 1:
-                minx = 100.0
-                maxx = -100.0
-                for c in ce:
-                    if vl[c[0]].co.x < minx:
-                        minx = vl[c[0]].co.x
-                        c1 = c
-                    if vl[c[1]].co.x < minx:
-                        minx = vl[c[1]].co.x
-                        c1 = c
-                    if vl[c[0]].co.x > maxx:
-                        maxx = vl[c[0]].co.x
-                        c2 = c
-                    if vl[c[1]].co.x > maxx:
-                        maxx = vl[c[1]].co.x
-                        c2 = c
-                    #print("            : %d:(%2.2f) %d:(%2.2f)"%(c[0],vl[c[0]].co.x,c[1],vl[c[1]].co.x))
-                    #print("            : (%d,%d) minx=%2.4f maxx=%2.4f"%(c[0],c[1],minx,maxx))
+            minx = 100.0
+            maxx = -100.0
+            for c in ce:
+                if vl[c[0]].co.x < minx:
+                    minx = vl[c[0]].co.x
+                    c1 = c
+                if vl[c[1]].co.x < minx:
+                    minx = vl[c[1]].co.x
+                    c1 = c
+                if vl[c[0]].co.x > maxx:
+                    maxx = vl[c[0]].co.x
+                    c2 = c
+                if vl[c[1]].co.x > maxx:
+                    maxx = vl[c[1]].co.x
+                    c2 = c
+                    # print("            : %d:(%2.2f) %d:(%2.2f)"%(c[0],vl[c[0]].co.x,c[1],vl[c[1]].co.x))
+                    # print("            : (%d,%d) minx=%2.4f maxx=%2.4f"%(c[0],c[1],minx,maxx))
         else:
             c1 = (-1, 0)
             c2 = (-1, 0)
 
         return (c1, c2)
 
-    def extractPerimeterEdges(self,m):
+    def extractPerimeterEdges(self, m):
 
         el = []
         perifEdgeList = []
@@ -1489,7 +1504,7 @@ class AirProfile(bpy.types.Operator):
 
         return perifEdgeList
 
-    def makeTwist(self,a, maxTwist):
+    def makeTwist(self, a, maxTwist):
         pe = self.extractPerimeterEdges(a)
         miny = 100000
         maxy = -100000
@@ -1499,19 +1514,20 @@ class AirProfile(bpy.types.Operator):
             if v.co.y > maxy:
                 maxy = v.co.y
         for v in a.data.vertices:
-                if v.co.y != 0 and v.co.x != 0:
-                    e1, e2 = self.getEdgesCrossing(a.data.vertices, pe, v.co.y)
-                    if e1[0] != -1 and e2[0] != -1:
-                        x1 = self.getXinEdge(a.data.vertices, e1, v.co.y)
-                        x2 = self.getXinEdge(a.data.vertices, e2, v.co.y)
-                        leftx = min(x1, x2)
-                        angle = ((v.co.y - miny) / (maxy - miny) * maxTwist) / 180 * 3.14159
-                        a.data.vertices[v.index].co.z += sin(angle) * (v.co.x - leftx)
-                        a.data.vertices[v.index].co.x = cos(angle) * (v.co.x - leftx) + leftx
+            if v.co.y != 0 and v.co.x != 0:
+                e1, e2 = self.getEdgesCrossing(a.data.vertices, pe, v.co.y)
+                if e1[0] != -1 and e2[0] != -1:
+                    x1 = self.getXinEdge(a.data.vertices, e1, v.co.y)
+                    x2 = self.getXinEdge(a.data.vertices, e2, v.co.y)
+                    leftx = min(x1, x2)
+                    angle = ((v.co.y - miny) / (maxy - miny) * maxTwist) / 180 * 3.14159
+                    a.data.vertices[v.index].co.z += sin(angle) * (v.co.x - leftx)
+                    a.data.vertices[v.index].co.x = cos(angle) * (v.co.x - leftx) + leftx
 
-    def camber(self,ctx=None, mp=0.1, pp=0.5, weightMode=False, profileMode=False, ctype="NACA",ellipDis=False,shrink=False):
+    def camber(self, ctx=None, mp=0.1, pp=0.5, weightMode=False, profileMode=False, ctype="NACA", ellipDis=False,
+               shrink=False):
         class localVertex:
-            def __init__(self,x,y,z,index):
+            def __init__(self, x, y, z, index):
                 self.x = x
                 self.newx = x
                 self.y = y
@@ -1532,8 +1548,8 @@ class AirProfile(bpy.types.Operator):
             vxsInPe.append(e[1])
         miny = min([v.co.y for v in a.data.vertices])
         maxy = max([v.co.y for v in a.data.vertices])
-        halfSpan  = (maxy - miny)/2
-        halfSpanY = halfSpan+miny
+        halfSpan = (maxy - miny) / 2
+        halfSpanY = halfSpan + miny
         # Calculate the length of the profile by simple splitting
         # into line pieces and summing
         if shrink:
@@ -1541,23 +1557,23 @@ class AirProfile(bpy.types.Operator):
             dxf = 1.0 / float(steps)
             yp = 0  # lets assume all profile starts from 0 at x=0
             lineLength = 0.0
-            for x in range(1,steps):
-                xf = float(x)/float(steps)
-                y = profile(xf,mp,pp)
-                lineLength += sqrt((y -yp)*(y-yp)+dxf*dxf)
+            for x in range(1, steps):
+                xf = float(x) / float(steps)
+                y = profile(xf, mp, pp)
+                lineLength += sqrt((y - yp) * (y - yp) + dxf * dxf)
                 yp = y
-            XshrinkFactor = 1/lineLength
+            XshrinkFactor = 1 / lineLength
         else:
             XshrinkFactor = 1.0
-        verticesCopy = [localVertex(v.co.x,v.co.y,v.co.z,v.index) for v in a.data.vertices]
+        verticesCopy = [localVertex(v.co.x, v.co.y, v.co.z, v.index) for v in a.data.vertices]
         for v in verticesCopy:
-            e1, e2 = self.getEdgesCrossing(a.data.vertices, pe,v.y)
+            e1, e2 = self.getEdgesCrossing(a.data.vertices, pe, v.y)
             if e1[0] != -1 and e2[0] != -1:
                 x1 = self.getXinEdge(a.data.vertices, e1, v.y)
                 x2 = self.getXinEdge(a.data.vertices, e2, v.y)
                 leftx = min(x1, x2)
                 rightx = max(x1, x2)
-                x = (v.x - leftx) / (rightx - leftx+0.0001)
+                x = (v.x - leftx) / (rightx - leftx + 0.0001)
                 if v.index in vxsInPe:
                     y = 0.0
                 elif ctype == 'NACA':
@@ -1565,10 +1581,10 @@ class AirProfile(bpy.types.Operator):
                 elif ctype == 'CURVE':
                     y = curveProfile(x, sce.sailflow_model.curvePoints)
                 elif ctype == 'CUSTOM':
-                    heightPerc = (v.co.y - miny) / (maxy - miny)
+                    heightPerc = (v.y - miny) / (maxy - miny)
                     y = custom_profile.profile(x, heightPerc, v.co.x, v.co.y, miny, maxy)
                 if ellipDis:
-                    y = y*sqrt(1-((v.co.y-halfSpanY)/halfSpan)**2)
+                    y = y * sqrt(1 - ((v.y - halfSpanY) / halfSpan) ** 2)
 
                 v.z = y * (rightx - leftx) * XshrinkFactor
                 v.newx = leftx + (v.x - leftx) * XshrinkFactor
@@ -1592,6 +1608,7 @@ class AirProfile(bpy.types.Operator):
     def poll(cls, context):
         return context.active_object and context.active_object.type == 'MESH' and context.mode == 'OBJECT'
 
+
 class printPDF(bpy.types.Operator):
     bl_idname = "mesh.print_pdf"
     bl_label = "Print PDF"
@@ -1599,59 +1616,57 @@ class printPDF(bpy.types.Operator):
 
     unitToMm = 1000
 
-
     filepath = bpy.props.StringProperty(subtype="FILE_PATH")
 
-    def containedIn(self,v,w,h):
+    def containedIn(self, v, w, h):
         return (v.x >= 0 and v.x <= w and v.y >= 0 and v.y <= h)
 
-    def clipping(self,v1,v2,w,h):
+    def clipping(self, v1, v2, w, h):
         vout1 = None
         vout2 = None
-        if self.containedIn(v1,w,h):
-            #print(" clipping: V1 already in ")
+        if self.containedIn(v1, w, h):
+            # print(" clipping: V1 already in ")
             vout1 = v1
-        if self.containedIn(v2,w,h):
-            #print(" clipping: V2 already in ")
+        if self.containedIn(v2, w, h):
+            # print(" clipping: V2 already in ")
             vout1 = v2
 
-        v = mathutils.geometry.intersect_line_line_2d(v1,v2,Vector((0,0,0)),Vector((w,0,0)))
+        v = mathutils.geometry.intersect_line_line_2d(v1, v2, Vector((0, 0, 0)), Vector((w, 0, 0)))
         if v:
-            #print(" clipping: h bassa")
+            # print(" clipping: h bassa")
             if vout1 == None:
                 vout1 = v
             elif (v != vout1):
                 vout2 = v
-                return vout1,vout2
-        v = mathutils.geometry.intersect_line_line_2d(v1,v2,Vector((w,0,0)),Vector((w,h,0)))
+                return vout1, vout2
+        v = mathutils.geometry.intersect_line_line_2d(v1, v2, Vector((w, 0, 0)), Vector((w, h, 0)))
         if v:
-            #print(" clipping: v destra")
+            # print(" clipping: v destra")
             if vout1 == None:
                 vout1 = v
             elif (v != vout1):
                 vout2 = v
-                return vout1,vout2
-        v = mathutils.geometry.intersect_line_line_2d(v1,v2,Vector((w,h,0)),Vector((0,h,0)))
+                return vout1, vout2
+        v = mathutils.geometry.intersect_line_line_2d(v1, v2, Vector((w, h, 0)), Vector((0, h, 0)))
         if v:
-            #print(" clipping: h alta")
+            # print(" clipping: h alta")
             if vout1 == None:
                 vout1 = v
             elif (v != vout1):
                 vout2 = v
-                return vout1,vout2
-        v = mathutils.geometry.intersect_line_line_2d(v1,v2,Vector((0,h,0)),Vector((0,0,0)))
+                return vout1, vout2
+        v = mathutils.geometry.intersect_line_line_2d(v1, v2, Vector((0, h, 0)), Vector((0, 0, 0)))
         if v:
-            #print(" clipping: v sinistra")
+            # print(" clipping: v sinistra")
             if vout1 == None:
                 vout1 = v
             elif (v != vout1):
                 vout2 = v
-        return vout1,vout2
+        return vout1, vout2
 
-    def makePDF(self, a, pe, vxs, fmt, freeTxt='', mp=False,offSetSet=0,overlapSet=0,w=0,h=0):
+    def makePDF(self, a, pe, vxs, fmt, freeTxt='', mp=False, offSetSet=0, overlapSet=0, w=0, h=0):
         xs = []
         ys = []
-
 
         for e in pe:
             v0 = a.matrix_world * vxs[e[0]].co
@@ -1668,80 +1683,82 @@ class printPDF(bpy.types.Operator):
             vc = a.matrix_world * v.co
             vxs_pix.append(Vector([(vc.x - min_x) * self.unitToMm, (vc.y - min_y) * self.unitToMm]))
 
-        #print("Vector")
-        #for i in range(len(vxs_pix)):
-            #print(i,vxs_pix[i])
+            # print("Vector")
+            # for i in range(len(vxs_pix)):
+            # print(i,vxs_pix[i])
 
         fname = self.filepath
-        pdf = FPDF(format=fmt,pw=w,ph=h)
-        offSet = pdf.dimension()[0]*offSetSet/100
-        #percentage of the offSet used for overlap between pages
-        overlap = pdf.dimension()[0]*overlapSet/100
+        pdf = FPDF(format=fmt, pw=w, ph=h)
+        offSet = pdf.dimension()[0] * offSetSet / 100
+        # percentage of the offSet used for overlap between pages
+        overlap = pdf.dimension()[0] * overlapSet / 100
         pdf.set_compression(False)
         if not mp:
             pdf.add_page()
             for e in pe:
                 p1 = vxs_pix[e[0]]
                 p2 = vxs_pix[e[1]]
-                pdf.line(p1.x + offSet, (pdf.dimension()[1]-p1.y)-offSet , p2.x + offSet, (pdf.dimension()[1]-p2.y)-offSet)
+                pdf.line(p1.x + offSet, (pdf.dimension()[1] - p1.y) - offSet, p2.x + offSet,
+                         (pdf.dimension()[1] - p2.y) - offSet)
 
             # Make the header
             pdf.set_x(0)
             pdf.set_y(0)
-            date = str(time.localtime().tm_mday) + "/" + str(time.localtime().tm_mon) + "/" + str(time.localtime().tm_year)
+            date = str(time.localtime().tm_mday) + "/" + str(time.localtime().tm_mon) + "/" + str(
+                time.localtime().tm_year)
             pdf.set_font('Arial', 'B', 12)
-            #pdf.cell(w=75, h=10, txt=a.name, border=1, ln=2, align='C')
-            #pdf.set_font(family='Arial', size=12)
+            # pdf.cell(w=75, h=10, txt=a.name, border=1, ln=2, align='C')
+            # pdf.set_font(family='Arial', size=12)
             pdf.cell(w=75, h=5, txt=date, border=1, ln=2, align='C')
-            #pdf.cell(w=75, h=5, txt=freeTxt + " ", border=1, ln=0, align='C')
+            # pdf.cell(w=75, h=5, txt=freeTxt + " ", border=1, ln=0, align='C')
         else:
-            clipSizeH = int(pdf.dimension()[0]-2*offSet)
-            clipSizeV = int(pdf.dimension()[1]-2*offSet)
+            clipSizeH = int(pdf.dimension()[0] - 2 * offSet)
+            clipSizeV = int(pdf.dimension()[1] - 2 * offSet)
             minx = min([v.x for v in vxs_pix])
             maxx = max([v.x for v in vxs_pix])
             miny = min([v.y for v in vxs_pix])
             maxy = max([v.y for v in vxs_pix])
-            numPagesH = int((maxx - minx)/(clipSizeH-overlap))+1
-            numPagesV = int((maxy - miny)/(clipSizeV-overlap))+1
+            numPagesH = int((maxx - minx) / (clipSizeH - overlap)) + 1
+            numPagesV = int((maxy - miny) / (clipSizeV - overlap)) + 1
 
-            for h in range(0,numPagesH):
-                for v in range(0,numPagesV):
+            for h in range(0, numPagesH):
+                for v in range(0, numPagesV):
                     pdf.add_page()
-                    line=0
+                    line = 0
                     for e in pe:
                         # Translate the points
-                        cross1 = Vector([vxs_pix[e[0]].x,vxs_pix[e[0]].y])
-                        cross2 = Vector([vxs_pix[e[1]].x,vxs_pix[e[1]].y])
-                        cross1.x = cross1.x - float(clipSizeH*h)+float(overlap*h)
-                        cross2.x = cross2.x - float(clipSizeH*h)+float(overlap*h)
-                        cross1.y = cross1.y - float(clipSizeV*v)+float(overlap*v)
-                        cross2.y = cross2.y - float(clipSizeV*v)+float(overlap*v)
+                        cross1 = Vector([vxs_pix[e[0]].x, vxs_pix[e[0]].y])
+                        cross2 = Vector([vxs_pix[e[1]].x, vxs_pix[e[1]].y])
+                        cross1.x = cross1.x - float(clipSizeH * h) + float(overlap * h)
+                        cross2.x = cross2.x - float(clipSizeH * h) + float(overlap * h)
+                        cross1.y = cross1.y - float(clipSizeV * v) + float(overlap * v)
+                        cross2.y = cross2.y - float(clipSizeV * v) + float(overlap * v)
 
-                        if not (self.containedIn(cross1,clipSizeH, clipSizeV) and
-                                self.containedIn(cross2,clipSizeH, clipSizeV)):
-                            cross1, cross2 = self.clipping(cross1,cross2,clipSizeH, clipSizeV)
+                        if not (self.containedIn(cross1, clipSizeH, clipSizeV) and
+                                    self.containedIn(cross2, clipSizeH, clipSizeV)):
+                            cross1, cross2 = self.clipping(cross1, cross2, clipSizeH, clipSizeV)
 
                         if cross1 != None and cross2 != None:
-                            pdf.line(cross1.x+offSet,
-                                     (pdf.dimension()[1]-cross1.y)-offSet,
-                                     cross2.x+offSet,
-                                     (pdf.dimension()[1]-cross2.y)-offSet)
-                            line +=1
+                            pdf.line(cross1.x + offSet,
+                                     (pdf.dimension()[1] - cross1.y) - offSet,
+                                     cross2.x + offSet,
+                                     (pdf.dimension()[1] - cross2.y) - offSet)
+                            line += 1
 
-                    if (h+v!=0):
+                    if (h + v != 0):
                         pdf.set_line_width(0.2)
-                        pdf.line(0.0,pdf.dimension()[1]-offSet-overlap,pdf.dimension()[0],pdf.dimension()[1]-offSet-overlap)
-                        pdf.line(offSet+overlap,0.0,offSet+overlap,pdf.dimension()[1] )
+                        pdf.line(0.0, pdf.dimension()[1] - offSet - overlap, pdf.dimension()[0],
+                                 pdf.dimension()[1] - offSet - overlap)
+                        pdf.line(offSet + overlap, 0.0, offSet + overlap, pdf.dimension()[1])
 
                     pdf.set_x(0)
                     pdf.set_y(0)
-                    #date = str(time.localtime().tm_mday) + "/" + str(time.localtime().tm_mon) + "/" + str(time.localtime().tm_year)
-                    #pdf.set_font('Arial', 'B', 24)
+                    # date = str(time.localtime().tm_mday) + "/" + str(time.localtime().tm_mon) + "/" + str(time.localtime().tm_year)
+                    # pdf.set_font('Arial', 'B', 24)
                     pdf.set_font(family='Arial', size=12)
-                    pdf.cell(w=75, h=10, txt=a.name+"H:"+str(h)+" V:"+str(v), border=1, ln=2, align='C')
-                    #pdf.cell(w=75, h=5, txt=date, border=1, ln=2, align='C')
-                    #pdf.cell(w=75, h=5, txt=freeTxt + " ", border=1, ln=0, align='C')
-
+                    pdf.cell(w=75, h=10, txt=a.name + "H:" + str(h) + " V:" + str(v), border=1, ln=2, align='C')
+                    # pdf.cell(w=75, h=5, txt=date, border=1, ln=2, align='C')
+                    # pdf.cell(w=75, h=5, txt=freeTxt + " ", border=1, ln=0, align='C')
 
         pdf.output(fname, 'F')
 
@@ -1754,10 +1771,11 @@ class printPDF(bpy.types.Operator):
                 el.append((e[1], e[0]))
         vxs = a.data.vertices
         se = sce.sailflow_model
-        self.makePDF(a, el, vxs, se.paperFormat, se.freeText,se.multiPages,se.margin,se.overlap,se.paperWidth,se.paperHeight);
+        self.makePDF(a, el, vxs, se.paperFormat, se.freeText, se.multiPages, se.margin, se.overlap, se.paperWidth,
+                     se.paperHeight);
         return {'FINISHED'}
 
-    def invoke(self, context,event):
+    def invoke(self, context, event):
         context.window_manager.fileselect_add(self)
         return {'RUNNING_MODAL'}
 
@@ -1765,26 +1783,27 @@ class printPDF(bpy.types.Operator):
     def poll(cls, context):
         return context.active_object and context.active_object.type == 'MESH'
 
+
 class outputAscii(bpy.types.Operator):
     bl_idname = "mesh.print_ascii"
     bl_label = "Print ASCII"
     bl_description = "print ASCII description of selected panel"
     filepath = bpy.props.StringProperty(subtype="FILE_PATH")
 
-    def execute(self,context):
+    def execute(self, context):
         sce = bpy.context.scene
 
         plotDX = sce.sailflow_model.asciiDx
 
         obj = context.active_object
         # finds the minimum and max X of the panel scanning all vertices
-        vxs = [(v.co.x,v.co.y,idx) for idx,v in enumerate(obj.data.vertices)]
-        xmin = min(vxs, key = lambda t: t[0])[0]
-        xmax = max(vxs, key = lambda t: t[0])[0]
-        ymin = min(vxs, key= lambda t: t[1])[1]
-        ymax = max(vxs, key= lambda t: t[1])[1]
+        vxs = [(v.co.x, v.co.y, idx) for idx, v in enumerate(obj.data.vertices)]
+        xmin = min(vxs, key=lambda t: t[0])[0]
+        xmax = max(vxs, key=lambda t: t[0])[0]
+        ymin = min(vxs, key=lambda t: t[1])[1]
+        ymax = max(vxs, key=lambda t: t[1])[1]
 
-        #get all periferal edges
+        # get all periferal edges
         pes = extractPerimeterEdges(obj)
         vxs = obj.data.vertices
         pnts = []
@@ -1805,31 +1824,30 @@ class outputAscii(bpy.types.Operator):
                         if not vxs[e[1]].co in corners:
                             corners.append(vxs[e[1]].co)
 
-        xscan=xmin
-        while xscan <=xmax:
+        xscan = xmin
+        while xscan <= xmax:
             for e in pes:
-                iv = mathutils.geometry.intersect_line_line_2d(Vector((xscan,ymin-1,0)),\
-                                                               Vector((xscan,ymax+1,0)),\
-                                                               vxs[e[0]].co,vxs[e[1]].co)
+                iv = mathutils.geometry.intersect_line_line_2d(Vector((xscan, ymin - 1, 0)), \
+                                                               Vector((xscan, ymax + 1, 0)), \
+                                                               vxs[e[0]].co, vxs[e[1]].co)
                 if iv:
-                     pnts.append((xscan,iv[0],iv[1]))
-            xscan = xscan + plotDX/100
+                    pnts.append((xscan, iv[0], iv[1]))
+            xscan = xscan + plotDX / 100
 
         f = open(self.filepath, 'w')
         f.write("---------------------------------\n")
-        f.write(("Panel %s\n")%(obj.name))
+        f.write(("Panel %s\n") % (obj.name))
         f.write("---------------------------------\n")
         f.write("Coordinates of the corners \n")
         for c in corners:
-            f.write(("(%2.3f,%2.3f) ")%(c.x-xmin,c.y-ymin))
+            f.write(("(%2.3f,%2.3f) ") % (c.x - xmin, c.y - ymin))
 
-        f.write(("\nCoordinates %d cm at distance\n")%(plotDX))
+        f.write(("\nCoordinates %d cm at distance\n") % (plotDX))
         for p in pnts:
-            s = ("[%2.3f] %2.3f %2.3f\n")%(p[0],p[1]-xmin,p[2]-ymin)
+            s = ("[%2.3f] %2.3f %2.3f\n") % (p[0], p[1] - xmin, p[2] - ymin)
             f.write(s)
         f.close()
         return {'FINISHED'}
-
 
     def invoke(self, context, event):
         context.window_manager.fileselect_add(self)
@@ -1839,126 +1857,135 @@ class outputAscii(bpy.types.Operator):
     def poll(cls, context):
         return context.active_object and context.active_object.type == 'MESH'
 
+
 class AirFoilSettings(bpy.types.PropertyGroup):
     curveTypes = [
         ("NACA", "Naca 4", "", 1),
         ("CUSTOM", "Profile on routine", "", 2),
-        ("DAT", "Load DAT and lofting", "", 3),
-        ("CURVE","Profile Bezier or Mesh","",4)
+        ("DAT", "Load DAT and/or lofting", "", 3),
+        ("CURVE", "Profile Bezier or Mesh", "", 4)
     ]
-    m = IntProperty (
+    m = IntProperty(
         name="% Max Camber",
         description="Maximum Camber (% of chord)",
         default=0,
         min=0,
         max=50)
-    p = IntProperty (
+    p = IntProperty(
         name="% Camber Pos",
         description="Position of Camber (% of chord)",
         default=0,
         min=20,
         max=70)
 
-    t = EnumProperty(name="Curve",default="NACA",items=curveTypes)
+    t = EnumProperty(name="Curve", default="NACA", items=curveTypes)
 
-    shrink = BoolProperty(name="Apply Shrink",default=False)
-    curve = BoolProperty(name="Apply Curve",default=False)
-    twist = BoolProperty(name="Apply Twist",default=False)
-    tw = IntProperty (name="Twist Angle",description="Value of angle", default=0,min=0,max=90)
+    shrink = BoolProperty(name="Apply Shrink", default=False)
+    curve = BoolProperty(name="Apply Curve", default=False)
+    twist = BoolProperty(name="Apply Twist", default=False)
+    ellipAmount = bpy.props.FloatProperty(name="Elliptical Amount", default=0.0, min=0.0, max = 1.0)
+    ellipCenter = bpy.props.FloatProperty(name="Vertical Display", default=0.0, min=-1.0, max = 1.0)
+    tw = IntProperty(name="Twist Angle", description="Value of angle", default=0, min=0, max=90)
     energyMinimizer = bpy.props.BoolProperty(name="Stress Relief", default=False)
     maxDeformation = bpy.props.FloatProperty(name="Min stress reduction", default=0.001, min=0.000001, max=0.1)
     deltaDeformation = bpy.props.IntProperty(name="accuracy", default=3, min=1, max=10)
-    polSeed = bpy.props.IntProperty(name="Use start face",default=-1)
-    useSeed =  bpy.props.BoolProperty(name="Start from face", default=False)
-    resEnergy = bpy.props.FloatProperty(name="Residual Strain",default=0)
+    polSeed = bpy.props.IntProperty(name="Use start face", default=-1)
+    useSeed = bpy.props.BoolProperty(name="Start from face", default=False)
+    resEnergy = bpy.props.FloatProperty(name="Residual Strain", default=0)
 
-    #paperFormat = bpy.props.StringProperty (name="Paper Size",description="others,4a0,2a0,a0,a1,a2,a3,a4",default='a0')
-    freeText = bpy.props.StringProperty (name="Free Text", description="Anything appearing in the PDF",default='free text')
-    margin = IntProperty (name="% of page margin",
+    # paperFormat = bpy.props.StringProperty (name="Paper Size",description="others,4a0,2a0,a0,a1,a2,a3,a4",default='a0')
+    freeText = bpy.props.StringProperty(name="Free Text", description="Anything appearing in the PDF",
+                                        default='free text')
+    margin = IntProperty(name="% of page margin",
+                         default=10,
+                         min=0,
+                         max=25)
+    overlap = IntProperty(name="% of overlap bw pages",
                           default=10,
                           min=0,
                           max=25)
-    overlap = IntProperty (name="% of overlap bw pages",
-                          default=10,
-                          min=0,
-                          max=25)
-    paperWidth = IntProperty(name="Width",max=1000)
+    paperWidth = IntProperty(name="Width", max=1000)
     paperHeight = IntProperty(name="Height", max=3500)
 
     ellipDis = BoolProperty(name="Eliptic Distribution", default=False)
 
     paperSizes = [
-      ("4A0","4a0","",1),
-      ("2A0","2a0","",2),
-      ("A0","a0","",3),
-      ("A1","a1","",4),
-      ("A2","a2","",5),
-      ("A3","a3","",6),
-      ("A4","a4","",7),
-      ("Other","other","",8)]
+        ("4A0", "4a0", "", 1),
+        ("2A0", "2a0", "", 2),
+        ("A0", "a0", "", 3),
+        ("A1", "a1", "", 4),
+        ("A2", "a2", "", 5),
+        ("A3", "a3", "", 6),
+        ("A4", "a4", "", 7),
+        ("Other", "other", "", 8)]
 
-    paperFormat = bpy.props.EnumProperty (name = "Paper Size", default="A4",items=paperSizes)
-    freeText = bpy.props.StringProperty (name = "Free Text", description = "Anything appearing in the PDF", default = 'free text')
-    multiPages = bpy.props.BoolProperty(name="Multi pages",default=False)
+    paperFormat = bpy.props.EnumProperty(name="Paper Size", default="A4", items=paperSizes)
+    freeText = bpy.props.StringProperty(name="Free Text", description="Anything appearing in the PDF",
+                                        default='free text')
+    multiPages = bpy.props.BoolProperty(name="Multi pages", default=False)
 
-    resolution  = IntProperty(name="Resolution",min=10,max=200)
-    asciiDx = IntProperty(name="X step cm",min=1,max=100)
-    steps = IntProperty(name="Loft steps",min=5,max=100)
-    spans = IntProperty(name="Loft spans",min=5,max=100)
-
+    resolution = IntProperty(name="Resolution", min=10, max=200)
+    asciiDx = IntProperty(name="X step cm", min=1, max=100)
+    steps = IntProperty(name="Loft steps", min=5, max=100)
+    spans = IntProperty(name="Loft spans", min=5, max=100)
 
     curvePoints = []
     curveName = bpy.props.StringProperty(name="object name")
 
-def select():
 
-    #print(bpy.context.mode)
-    if bpy.context.mode=="OBJECT":
+def select():
+    # print(bpy.context.mode)
+    if bpy.context.mode == "OBJECT":
         obj = bpy.context.object
         sel = len(bpy.context.selected_objects)
 
-        if sel==0:
-            bpy.selection=[]
+        if sel == 0:
+            bpy.selection = []
         else:
-            if sel==1:
-                bpy.selection=[]
+            if sel == 1:
+                bpy.selection = []
                 bpy.selection.append(obj)
-            elif sel>len(bpy.selection):
+            elif sel > len(bpy.selection):
                 for sobj in bpy.context.selected_objects:
-                    if (sobj in bpy.selection)==False:
+                    if (sobj in bpy.selection) == False:
                         bpy.selection.append(sobj)
 
-            elif sel<len(bpy.selection):
+            elif sel < len(bpy.selection):
                 for it in bpy.selection:
-                    if (it in bpy.context.selected_objects)==False:
+                    if (it in bpy.context.selected_objects) == False:
                         bpy.selection.remove(it)
 
-    #on edit mode doesnt work well
+                        # on edit mode doesnt work well
 
-#executes selection by order at 3d view
+
+# executes selection by order at 3d view
 class Selection(bpy.types.Header):
     bl_label = "Selection"
     bl_space_type = "VIEW_3D"
 
     def __init__(self):
-        #print("hey")
+        # print("hey")
         select()
 
     def draw(self, context):
         layout = self.layout
         row = layout.row()
-        row.label("Sel: "+str(len(bpy.selection)))
+        row.label("Sel: " + str(len(bpy.selection)))
+
 
 def register():
     bpy.utils.register_module(__name__)
     bpy.types.Scene.sailflow_model = bpy.props.PointerProperty(type=AirFoilSettings,
                                                                name="Airfoil Model",
                                                                description="Setting of the AirFoil")
+
+
 #    bpy.utils.register_class(Selection)
 
 def unregister():
     bpy.utils.unregister_module(__name__)
     bpy.utils.unregister_class(Selection)
+
 
 if __name__ == "__main__":
     register()
