@@ -41,6 +41,7 @@ Flattened = []
 VxFlat = []
 flatObj = None
 bpy.selection = []
+panelsBoundingBoxes = []
 
 
 def extractPerimeterEdges(m):
@@ -88,6 +89,23 @@ def curveProfile(x, vxs):
             return i[1]
     return 0
 
+
+def extractPerimeterEdges(obj):
+    el = []
+    perifEdgeList = []
+    for p in obj.data.polygons:
+        for e in p.edge_keys:
+            if e[0] > e[1]:
+                el.append((e[1], e[0]))
+            else:
+                el.append(e)
+    while el:
+        e = el.pop()
+        if e in el:
+            el.remove(e)
+        else:
+            perifEdgeList.append(e)
+    return perifEdgeList
 
 class MyPoly:
     l1 = 0  # p1 - p3
@@ -629,12 +647,38 @@ class Flattener(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        return context.mode == 'EDIT_MESH' and context.active_object.type == 'MESH'
+        return True
+#        return context.mode == 'EDIT_MESH' and context.active_object.type == 'MESH'
 
     def execute(self, context):
         global Vxs
         global Flattened
         global flatObj
+
+        def boundingBoxAreaVectors(vectors):
+            vx = [v.x for v in vectors]
+            vy = [v.y for v in vectors]
+            minx = min(vx)
+            maxx = max(vx)
+            miny = min(vy)
+            maxy = max(vy)
+            return (maxx - minx) * (maxy - miny), (maxx, minx, maxy, miny)
+        def rotateVectorsAroundZ(vectors, angle):
+            for v in vectors:
+                v.rotate(Euler((0, 0, angle), 'XYZ'))
+        def minimizeBoundingBoxVec(vectors):
+            mina, minv = boundingBoxAreaVectors(vectors)
+            mini = 0
+            angleStep = 1
+            for i in range(0, 360, angleStep):
+                a, v = boundingBoxAreaVectors(vectors)
+                if mina > a:
+                    mina = a
+                    mini = i
+                    minv = v
+                rotateVectorsAroundZ(vectors, radians(angleStep))
+            # print("Rotation %d, bb=%f %f %f\n" % (mini, minv[0], minv[1], minv[2]))
+            return mini, minv
 
         sce = bpy.context.scene
         # Record the selected faces
@@ -647,10 +691,8 @@ class Flattener(bpy.types.Operator):
             if p.select and len(p.vertices) > 3:
                 self.report({'ERROR'}, 'Not all faces are triangles STOPPED')
                 return {'FINISHED'}
-
         if Flattened:
             del Flattened[:]
-
         if sce.sailflow_model.useSeed == False:
             sce.sailflow_model.resEnergy =self.makeFlattened(bpy.context.active_object,
                                                              sce.sailflow_model.energyMinimizer,
@@ -689,10 +731,34 @@ class Flattener(bpy.types.Operator):
         fobj = bpy.data.objects.new("panel", fmesh)
         #        fobj.matrix_world = bpy.context.active_object.matrix_world
         fobj.scale = bpy.context.active_object.scale
-        scene = bpy.context.scene
-        scene.objects.link(fobj)
-        fobj.location = Vector([0,0,0])
+        bpy.context.scene.objects.link(fobj)
+        # Set object location and layers num 6
+        fobj.layers[5] = True
+        fobj.layers[0] = False
+
+        vectors = []
+        for e in extractPerimeterEdges(fobj):
+            if fobj.data.vertices[e[0]].co not in vectors:
+                vectors.append(Vector(fobj.data.vertices[e[0]].co))
+            if fobj.data.vertices[e[1]].co not in vectors:
+                vectors.append(Vector(fobj.data.vertices[e[1]].co))
+        angle, box = minimizeBoundingBoxVec(vectors)
+        print("Angle %f"%(angle))
+        fobj.rotation_euler[2] = radians(angle)
+
+        xmaxFlatObj = max([v.co.x for v in flatObj.data.vertices])
+        xminfobj = min ([v.co.x for v in fobj.data.vertices])
+        dx = xminfobj - xmaxFlatObj
+        if dx < 0:
+            fobj.location.x = fobj.location.x - dx
+        fobj.location = Vector([x,y,0])
+        # Apply transformation
+        #fobj.data.transform(fobj.matrix_world)
+        panelsBoundingBoxes.append((box[0]+x,box[1]+x,box[2]+y,box[3]+y))
         flatObj = fobj
+        bpy.context.scene.layers[5] = True
+        bpy.context.scene.update()
+
         return {'FINISHED'}
 
 
@@ -1485,27 +1551,8 @@ class AirProfile(bpy.types.Operator):
 
         return (c1, c2)
 
-    def extractPerimeterEdges(self, m):
-
-        el = []
-        perifEdgeList = []
-        for p in m.data.polygons:
-            for e in p.edge_keys:
-                if e[0] > e[1]:
-                    el.append((e[1], e[0]))
-                else:
-                    el.append(e)
-        while el:
-            e = el.pop()
-            if e in el:
-                el.remove(e)
-            else:
-                perifEdgeList.append(e)
-
-        return perifEdgeList
-
     def makeTwist(self, a, maxTwist):
-        pe = self.extractPerimeterEdges(a)
+        pe = extractPerimeterEdges(a)
         miny = 100000
         maxy = -100000
         for v in a.data.vertices:
