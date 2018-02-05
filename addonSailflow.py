@@ -526,7 +526,7 @@ class Flattener(bpy.types.Operator):
             maxIdx = None
             self.nodesMovToGain = [[0, 0, 0.0] for x in range(len(EVs))]
             # Search the node with the max decrease in energy
-            # and populate the database of gains self.nodesMovToGain             
+            # and populate the database of gains self.nodesMovToGain
             for evIdx in range(len(EVs)):
                 e = EVs[evIdx]
                 if e.energy > maxDeformation:
@@ -549,7 +549,7 @@ class Flattener(bpy.types.Operator):
             # Go recursiverly in the database applying all changes for a max loops
             # or until no further improvement can be found (MAXCOUNT or no maxIdx)
             for count in range(MAXCOUNT):
-                # if there one node that can minimize energy    
+                # if there one node that can minimize energy
                 if maxIdx:
                     # print("Selected node ",maxE.idx,"energy=",maxE.energy," dec energy=",self.nodesMovToGain[maxE.evx][2])
                     # apply the change in position
@@ -558,7 +558,7 @@ class Flattener(bpy.types.Operator):
                     # update the energy content and the deltas for the winnig vertex
                     maxE.calcEnergy()
                     maxE.calcDeltaEnergy(delta)
-                    # update the database of nodeMovToGain for the winning vertex       
+                    # update the database of nodeMovToGain for the winning vertex
                     self.updateNodesMovToGain(maxE, delta)
                     # print("..updating database for adjacent")
                     for ev in EVs:
@@ -589,7 +589,7 @@ class Flattener(bpy.types.Operator):
                     # if maxIdx
             # for count in range(MAXCOUNT):
 
-            # decrease the movement step and repeat   
+            # decrease the movement step and repeat
             delta = delta / 10
 
         maxRE = 0
