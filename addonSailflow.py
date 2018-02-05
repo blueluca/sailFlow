@@ -41,7 +41,7 @@ Flattened = []
 VxFlat = []
 flatObj = None
 bpy.selection = []
-panelsBoundingBoxes = []
+
 
 
 def extractPerimeterEdges(m):
@@ -655,14 +655,19 @@ class Flattener(bpy.types.Operator):
         global Flattened
         global flatObj
 
-        def boundingBoxAreaVectors(vectors):
-            vx = [v.x for v in vectors]
-            vy = [v.y for v in vectors]
+        def boundingBoxAreaVectors(Vectors):
+            vx = [v.x for v in Vectors]
+            vy = [v.y for v in Vectors]
             minx = min(vx)
             maxx = max(vx)
             miny = min(vy)
             maxy = max(vy)
             return (maxx - minx) * (maxy - miny), (maxx, minx, maxy, miny)
+        def boundingBox(o):
+            print("boundingbox working on ",o.name)
+            vxs = [v.co for v in o.data.vertices]
+            a, bb = boundingBoxAreaVectors(vxs)
+            return bb
         def rotateVectorsAroundZ(vectors, angle):
             for v in vectors:
                 v.rotate(Euler((0, 0, angle), 'XYZ'))
@@ -691,6 +696,10 @@ class Flattener(bpy.types.Operator):
             if p.select and len(p.vertices) > 3:
                 self.report({'ERROR'}, 'Not all faces are triangles STOPPED')
                 return {'FINISHED'}
+        if bpy.context.mode == 'OBJECT':
+            self.report({'ERROR'}, 'You must be in EDIT mode to flatten')
+            return {'FINISHED'}
+
         if Flattened:
             del Flattened[:]
         if sce.sailflow_model.useSeed == False:
@@ -724,11 +733,11 @@ class Flattener(bpy.types.Operator):
         for vidx in vIdxList:
             vertices.append([Vxs[vidx].co.x, Vxs[vidx].co.y, Vxs[vidx].co.z])
 
-        fmesh = bpy.data.meshes.new("panel")
+        fmesh = bpy.data.meshes.new("SailPanel")
         fmesh.from_pydata(vertices, [], faces)
         # Update the displayed mesh with the new data
         fmesh.update()
-        fobj = bpy.data.objects.new("panel", fmesh)
+        fobj = bpy.data.objects.new("SailPanel", fmesh)
         #        fobj.matrix_world = bpy.context.active_object.matrix_world
         fobj.scale = bpy.context.active_object.scale
         bpy.context.scene.objects.link(fobj)
@@ -745,17 +754,42 @@ class Flattener(bpy.types.Operator):
         angle, box = minimizeBoundingBoxVec(vectors)
         print("Angle %f"%(angle))
         fobj.rotation_euler[2] = radians(angle)
-
-        xmaxFlatObj = max([v.co.x for v in flatObj.data.vertices])
-        xminfobj = min ([v.co.x for v in fobj.data.vertices])
-        dx = xminfobj - xmaxFlatObj
-        if dx < 0:
-            fobj.location.x = fobj.location.x - dx
-        fobj.location = Vector([x,y,0])
-        # Apply transformation
-        #fobj.data.transform(fobj.matrix_world)
-        panelsBoundingBoxes.append((box[0]+x,box[1]+x,box[2]+y,box[3]+y))
         flatObj = fobj
+        print(fobj)
+        if fobj.name != 'SailPanel':
+            print("search last panel")
+            # Search the last SailPanel
+            for i in range(1,10):
+                print("i=",i)
+                panelName = 'SailPanel.00'+str(i)
+                if not panelName in bpy.data.objects:
+                    break
+            i = i-1
+            if i == 1:
+                lastPanel = bpy.data.objects['SailPanel']
+            else:
+                panelName = 'SailPanel.00'+str(i-1)
+                lastPanel = bpy.data.objects[panelName]
+            # find the bounding box of the last SailPanel
+            print("lastPanel is ", lastPanel.name)
+            bbLP = boundingBox(lastPanel)
+            print("bbLP",bbLP)
+            # find the bounding box of fobj
+            bbFO = boundingBox(fobj)
+            # Align the min Y
+            yFO = bbLP[1]
+            # Avoid overal maxx with minx
+            if bbLP[2] > bbFO[2]:
+                xFO = bbLP[2]-bbFO[2]
+            else:
+                xFO = bbFO[2]-bbLP[2]
+        # else if it is the first panel
+        else:
+            xFO = 0
+            yFO = 0
+        # set the location
+        print("location",xFO,yFO)
+        fobj.location=(xFO,yFO,0)
         bpy.context.scene.layers[5] = True
         bpy.context.scene.update()
 
