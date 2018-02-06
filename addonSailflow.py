@@ -795,8 +795,9 @@ class Flattener(bpy.types.Operator):
         print("location", xFO+fobj.location[0], yFO+fobj.location[1])
         fobj.location = (xFO+fobj.location[0], yFO+fobj.location[1], 0)
         bpy.context.scene.layers[5] = True
+        bpy.data.objects[fobj.name].show_name = True
         bpy.context.scene.update()
-
+        bpy.context.scene.layers[5] = False
         return {'FINISHED'}
 
 
