@@ -664,11 +664,10 @@ class Flattener(bpy.types.Operator):
             maxx = max(vx)
             miny = min(vy)
             maxy = max(vy)
-            return (maxx - minx) * (maxy - miny), (maxx, minx, maxy, miny)
+            return (maxx - minx) * (maxy - miny), [maxx, minx, maxy, miny]
 
         def boundingBox(o):
-            print("boundingbox working on ", o.name)
-            vxs = [v.co for v in o.data.vertices]
+            vxs = [o.matrix_world * v.co for v in o.data.vertices]
             a, bb = boundingBoxAreaVectors(vxs)
             return bb
 
@@ -759,13 +758,15 @@ class Flattener(bpy.types.Operator):
         angle, box = minimizeBoundingBoxVec(vectors)
         print("Angle %f" % (angle))
         fobj.rotation_euler[2] = radians(angle)
+        bpy.context.scene.layers[5] = True
+        bpy.context.scene.update()
         flatObj = fobj
         print(fobj)
         if fobj.name != 'SailPanel':
-            print("search last panel")
+#            print("search last panel")
             # Search the last SailPanel
             for i in range(1, 10):
-                print("i=", i)
+ #               print("i=", i)
                 panelName = 'SailPanel.00' + str(i)
                 if not panelName in bpy.data.objects:
                     break
@@ -778,23 +779,21 @@ class Flattener(bpy.types.Operator):
             # find the bounding box of the last SailPanel
             print("lastPanel is ", lastPanel.name)
             bbLP = boundingBox(lastPanel)
-            print("bbLP", bbLP)
+            print("bbLP maxx=%2.2f minx=%2.2f maxy=%2.2f miny=%2.2f"%(bbLP[0],bbLP[1],bbLP[2],bbLP[3]))
             # find the bounding box of fobj
             bbFO = boundingBox(fobj)
+            print("bbFO maxx=%2.2f minx=%2.2f maxy=%2.2f miny=%2.2f"%(bbFO[0],bbFO[1],bbFO[2],bbFO[3]))
             # Align the min Y
-            yFO = bbLP[1]
+            yFO = bbLP[3]-bbFO[3]
             # Avoid overal maxx with minx
-            if bbLP[2] > bbFO[2]:
-                xFO = bbLP[2] - bbFO[2]
-            else:
-                xFO = bbFO[2] - bbLP[2]
+            xFO = bbLP[0] - bbFO[1]
         # else if it is the first panel
         else:
             xFO = 0
             yFO = 0
         # set the location
-        print("location", xFO, yFO)
-        fobj.location = (xFO, yFO, 0)
+        print("location", xFO+fobj.location[0], yFO+fobj.location[1])
+        fobj.location = (xFO+fobj.location[0], yFO+fobj.location[1], 0)
         bpy.context.scene.layers[5] = True
         bpy.context.scene.update()
 
