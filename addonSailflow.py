@@ -12,7 +12,6 @@ bl_info = {
 import imp
 from math import *
 import math
-import sys
 import time
 import bpy
 import re
@@ -41,7 +40,6 @@ Flattened = []
 VxFlat = []
 flatObj = None
 bpy.selection = []
-
 
 
 def extractPerimeterEdges(m):
@@ -106,6 +104,7 @@ def extractPerimeterEdges(obj):
         else:
             perifEdgeList.append(e)
     return perifEdgeList
+
 
 class MyPoly:
     l1 = 0  # p1 - p3
@@ -401,13 +400,15 @@ class enerVertex:
         self.adj = []
         self.energy = 0.0
         self.evx = 0
-
-    #        print("Create enVX ",i)
+        self.overallpdx = 0.0
+        self.overallmdx = 0.0
+        self.overallpdy = 0.0
+        self.overallmdy = 0.0
+        self.nodesMovToGain = []
 
     def addAdjacent(self, iandl):
         if not iandl in self.adj:
             self.adj.append(iandl)
-        #            print("added adj ",iandl)
 
     def calcEnergy(self):
         global Vxs
@@ -418,7 +419,7 @@ class enerVertex:
             dl = (Vxs[v[0]].co - Vxs[self.idx].co).length - v[1]
             #            print("...with ",v[0]," dl=",dl," over l=",v[1])
             self.energy = self.energy + dl * dl / v[1]
-        #            print("...calcEnergy [",self.idx,"-",v[0],"] dl=",dl," en=",self.energy)
+        # print("...calcEnergy [",self.idx,"-",v[0],"] dl=",dl," en=",self.energy)
         #        print("...calcEnery total ", self.idx,self.energy)
         return self.energy
 
@@ -648,7 +649,8 @@ class Flattener(bpy.types.Operator):
     @classmethod
     def poll(cls, context):
         return True
-#        return context.mode == 'EDIT_MESH' and context.active_object.type == 'MESH'
+
+    #        return context.mode == 'EDIT_MESH' and context.active_object.type == 'MESH'
 
     def execute(self, context):
         global Vxs
@@ -663,14 +665,17 @@ class Flattener(bpy.types.Operator):
             miny = min(vy)
             maxy = max(vy)
             return (maxx - minx) * (maxy - miny), (maxx, minx, maxy, miny)
+
         def boundingBox(o):
-            print("boundingbox working on ",o.name)
+            print("boundingbox working on ", o.name)
             vxs = [v.co for v in o.data.vertices]
             a, bb = boundingBoxAreaVectors(vxs)
             return bb
+
         def rotateVectorsAroundZ(vectors, angle):
             for v in vectors:
                 v.rotate(Euler((0, 0, angle), 'XYZ'))
+
         def minimizeBoundingBoxVec(vectors):
             mina, minv = boundingBoxAreaVectors(vectors)
             mini = 0
@@ -703,11 +708,11 @@ class Flattener(bpy.types.Operator):
         if Flattened:
             del Flattened[:]
         if sce.sailflow_model.useSeed == False:
-            sce.sailflow_model.resEnergy =self.makeFlattened(bpy.context.active_object,
-                                                             sce.sailflow_model.energyMinimizer,
-                                                             sce.sailflow_model.maxDeformation,
-                                                             sce.sailflow_model.deltaDeformation,
-                                                             -1)
+            sce.sailflow_model.resEnergy = self.makeFlattened(bpy.context.active_object,
+                                                              sce.sailflow_model.energyMinimizer,
+                                                              sce.sailflow_model.maxDeformation,
+                                                              sce.sailflow_model.deltaDeformation,
+                                                              -1)
         else:
             sce.sailflow_model.resEnergy = self.makeFlattened(bpy.context.active_object,
                                                               sce.sailflow_model.energyMinimizer,
@@ -752,44 +757,44 @@ class Flattener(bpy.types.Operator):
             if fobj.data.vertices[e[1]].co not in vectors:
                 vectors.append(Vector(fobj.data.vertices[e[1]].co))
         angle, box = minimizeBoundingBoxVec(vectors)
-        print("Angle %f"%(angle))
+        print("Angle %f" % (angle))
         fobj.rotation_euler[2] = radians(angle)
         flatObj = fobj
         print(fobj)
         if fobj.name != 'SailPanel':
             print("search last panel")
             # Search the last SailPanel
-            for i in range(1,10):
-                print("i=",i)
-                panelName = 'SailPanel.00'+str(i)
+            for i in range(1, 10):
+                print("i=", i)
+                panelName = 'SailPanel.00' + str(i)
                 if not panelName in bpy.data.objects:
                     break
-            i = i-1
+            i = i - 1
             if i == 1:
                 lastPanel = bpy.data.objects['SailPanel']
             else:
-                panelName = 'SailPanel.00'+str(i-1)
+                panelName = 'SailPanel.00' + str(i - 1)
                 lastPanel = bpy.data.objects[panelName]
             # find the bounding box of the last SailPanel
             print("lastPanel is ", lastPanel.name)
             bbLP = boundingBox(lastPanel)
-            print("bbLP",bbLP)
+            print("bbLP", bbLP)
             # find the bounding box of fobj
             bbFO = boundingBox(fobj)
             # Align the min Y
             yFO = bbLP[1]
             # Avoid overal maxx with minx
             if bbLP[2] > bbFO[2]:
-                xFO = bbLP[2]-bbFO[2]
+                xFO = bbLP[2] - bbFO[2]
             else:
-                xFO = bbFO[2]-bbLP[2]
+                xFO = bbFO[2] - bbLP[2]
         # else if it is the first panel
         else:
             xFO = 0
             yFO = 0
         # set the location
-        print("location",xFO,yFO)
-        fobj.location=(xFO,yFO,0)
+        print("location", xFO, yFO)
+        fobj.location = (xFO, yFO, 0)
         bpy.context.scene.layers[5] = True
         bpy.context.scene.update()
 
@@ -992,15 +997,16 @@ class DATLoad(bpy.types.Operator):
         me.from_pydata(Vert, Edges, Faces)
         me.update(calc_edges=True)
 
-    def CubicInterpolate(self, y0, y1, y2, y3, mu):
-        mu2 = mu * mu
-        a0 = -0.5 * y0 + 1.5 * y1 - 1.5 * y2 + 0.5 * y3
-        a1 = y0 - 2.5 * y1 + 2 * y2 - 0.5 * y3
-        a2 = -0.5 * y0 + 0.5 * y2
-        a3 = y1
-        return (a0 * mu * mu2 + a1 * mu2 + a2 * mu + a3)
-
     def upload(self, Foil, Resolution=250, interp_method="l"):
+
+        def CubicInterpolate(y0, y1, y2, y3, mu):
+            mu2 = mu * mu
+            a0 = -0.5 * y0 + 1.5 * y1 - 1.5 * y2 + 0.5 * y3
+            a1 = y0 - 2.5 * y1 + 2 * y2 - 0.5 * y3
+            a2 = -0.5 * y0 + 0.5 * y2
+            a3 = y1
+            return (a0 * mu * mu2 + a1 * mu2 + a2 * mu + a3)
+
         FF = open(Foil, 'r')
         data = FF.readlines()
 
@@ -1061,11 +1067,11 @@ class DATLoad(bpy.types.Operator):
         ix = []
         if Resolution < len(x):
             Resolution = len(x)
-        numpoints = int(Resolution / (len(x)-1))
+        numpoints = int(Resolution / (len(x) - 1))
         for idx in range(1, len(y) - 2):
             for pp in range(0, numpoints):
                 ppx = float(pp) / numpoints
-                iy.append(self.CubicInterpolate(y[idx - 1], y[idx], y[idx + 1], y[idx + 2], ppx))
+                iy.append(CubicInterpolate(y[idx - 1], y[idx], y[idx + 1], y[idx + 2], ppx))
                 ix.append(x[idx] + (x[idx + 1] - x[idx]) * ppx)
         # idx = len(y)-1
         # for pp in range(0, numpoints):
@@ -1073,7 +1079,7 @@ class DATLoad(bpy.types.Operator):
         #     iy.append(self.CubicInterpolate(y[idx - 3], y[idx-2], y[idx-1], y[idx], ppx))
         # ix.append(x[idx] - (x[idx-1] - x[idx]) * ppx)
 
-        return (ix, iy, RawPoints)
+        return ix, iy, RawPoints
 
     def execute(self, context):
         global custom_profile
@@ -1083,10 +1089,10 @@ class DATLoad(bpy.types.Operator):
         InterpX, InterpY, RawPoints = self.upload(self.filepath, Resolution=sce.sailflow_model.resolution)
 
         verts = [(InterpX[idx], 0, InterpY[idx]) for idx in range(0, len(InterpX) - 1)]
-        for i,v in enumerate(verts):
-            print (i,v)
+        for i, v in enumerate(verts):
+            print(i, v)
         # if the point 0 is not there we must create it.
-        #if (min(InterpX) > 0.0) and (min(InterpY) > 0.0):
+        # if (min(InterpX) > 0.0) and (min(InterpY) > 0.0):
         #   verts.insert(0, (0, 0, 0))
 
         edges = []
@@ -1232,7 +1238,7 @@ class LoftDAT(bpy.types.Operator):
 
                 p = self.getbezpoints(spl, mw, seg)
 
-                coord = self.cubic(p,t1)
+                coord = self.cubic(p, t1)
                 return coord
 
             elif spl.type == "NURBS":
@@ -1964,8 +1970,8 @@ class AirFoilSettings(bpy.types.PropertyGroup):
     shrink = BoolProperty(name="Apply Shrink", default=False)
     curve = BoolProperty(name="Apply Curve", default=False)
     twist = BoolProperty(name="Apply Twist", default=False)
-    ellipAmount = bpy.props.FloatProperty(name="Elliptical Amount", default=0.0, min=0.0, max = 1.0)
-    ellipCenter = bpy.props.FloatProperty(name="Vertical Display", default=0.0, min=-1.0, max = 1.0)
+    ellipAmount = bpy.props.FloatProperty(name="Elliptical Amount", default=0.0, min=0.0, max=1.0)
+    ellipCenter = bpy.props.FloatProperty(name="Vertical Display", default=0.0, min=-1.0, max=1.0)
     tw = IntProperty(name="Twist Angle", description="Value of angle", default=0, min=0, max=90)
     energyMinimizer = bpy.props.BoolProperty(name="Stress Relief", default=False)
     maxDeformation = bpy.props.FloatProperty(name="Min stress reduction", default=0.001, min=0.000001, max=0.1)
