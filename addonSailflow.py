@@ -16,8 +16,8 @@ import time
 import bpy
 import re
 
-from bpy.props import IntProperty, EnumProperty, BoolProperty, StringProperty
-from bpy.types import Operator
+from bpy.props import FloatProperty, IntProperty, EnumProperty, BoolProperty, StringProperty, IntVectorProperty, CollectionProperty
+from bpy.types import PropertyGroup, Panel, Object, Operator
 from fpdf import FPDF
 from mathutils import Vector, Euler, geometry
 import mathutils
@@ -40,7 +40,18 @@ Flattened = []
 VxFlat = []
 flatObj = None
 bpy.selection = []
+# -----------------------------
+# NEW OBJECT PROPERTIES
+# -----------------------------
+class sailPanelInfoClass(PropertyGroup):
+    face = IntProperty(name='Face of the parent')
 
+bpy.utils.register_class(sailPanelInfoClass)
+
+Object.sailPanel = CollectionProperty(type=sailPanelInfoClass)
+Object.sailPanelParent = StringProperty(name='Panel parent object')
+Object.areaSail = FloatProperty(name='Area orginal sail')
+Object.areaFlatten = FloatProperty(name='Area orginal sail')
 
 def extractPerimeterEdges(m):
     el = []
@@ -700,10 +711,11 @@ class Flattener(bpy.types.Operator):
             if p.select and len(p.vertices) > 3:
                 self.report({'ERROR'}, 'Not all faces are triangles STOPPED')
                 return {'FINISHED'}
+        # Check that we are in edit mode
         if bpy.context.mode == 'OBJECT':
             self.report({'ERROR'}, 'You must be in EDIT mode to flatten')
             return {'FINISHED'}
-
+        #Erase the previuos list if existed
         if Flattened:
             del Flattened[:]
         if sce.sailflow_model.useSeed == False:
@@ -718,6 +730,7 @@ class Flattener(bpy.types.Operator):
                                                               sce.sailflow_model.maxDeformation,
                                                               sce.sailflow_model.deltaDeformation,
                                                               sce.sailflow_model.polSeed)
+        #Flattened now contains the list of vertices of the flatten surface
         # Complet list of vertices used
         vIdxList = []
         faces = []
@@ -748,7 +761,7 @@ class Flattener(bpy.types.Operator):
         # Set object location and layers num 6
         fobj.layers[5] = True
         fobj.layers[0] = False
-
+        #Create list of vectors for the perimiter edges
         vectors = []
         for e in extractPerimeterEdges(fobj):
             if fobj.data.vertices[e[0]].co not in vectors:
@@ -756,17 +769,30 @@ class Flattener(bpy.types.Operator):
             if fobj.data.vertices[e[1]].co not in vectors:
                 vectors.append(Vector(fobj.data.vertices[e[1]].co))
         angle, box = minimizeBoundingBoxVec(vectors)
+        # Check the bounding box to ensure we dispose it vertical
+        if (box[0]-box[1]) > (box[2]-box[3]):
+            #x is the major axis
+            angle = angle+90
         print("Angle %f" % (angle))
         fobj.rotation_euler[2] = radians(angle)
         bpy.context.scene.layers[5] = True
         bpy.context.scene.update()
         flatObj = fobj
-        print(fobj)
+        # Now add the list of faces that were selected from the sail
+        # to be flattened. This property will be used to recall the
+        # surfaces when needed
+        for p in obj.data.polygons:
+            if p.select:
+                flatObj.sailPanel.add()
+                lastSailPanel = len(flatObj.sailPanel)-1
+                flatObj.sailPanel[lastSailPanel].face = p.index
+        flatObj.sailPanelParent = obj.name
+        # Adjust the position to put the last panel beside
+        # the prevous one. Looking to the naming to get the
+        # last panel.
         if fobj.name != 'SailPanel':
-#            print("search last panel")
             # Search the last SailPanel
             for i in range(1, 10):
- #               print("i=", i)
                 panelName = 'SailPanel.00' + str(i)
                 if not panelName in bpy.data.objects:
                     break
@@ -800,155 +826,30 @@ class Flattener(bpy.types.Operator):
         bpy.context.scene.layers[5] = False
         return {'FINISHED'}
 
+class highlightPanel(bpy.types.Operator):
+    bl_idname = "mesh.highlight"
+    bl_label = "Show Sail Panel"
+    bl_description = "bla bla bla"
 
-class VIEW3D_PT_airprofile_parameters(bpy.types.Panel):
-    bl_label = "Profile Parameters"
-    bl_space_type = "VIEW_3D"
-    bl_region_type = "TOOLS"
-    bl_category = "Sailflow Design"
+    @classmethod
+    def poll(cls, context):
+        return True
 
-    def draw(self, context):
-        sce = bpy.context.scene
-        layout = self.layout
-        col = layout.column(align=True)
-        col.prop(sce.sailflow_model, "t")
-
-        if sce.sailflow_model.t == 'NACA':
-            col = layout.column(align=True)
-            col.prop(sce.sailflow_model, "m")
-            col.prop(sce.sailflow_model, "p")
-
-        elif sce.sailflow_model.t == "CUSTOM":
-            col.operator("mesh.load_library")
-            col = layout.column(align=True)
-
-        elif sce.sailflow_model.t == "CURVE":
-            col.operator("mesh.curve_aquire")
-            col = layout.column(align=True)
-
-        elif sce.sailflow_model.t == "DAT":
-            col.operator("mesh.curve_load")
-            col.prop(sce.sailflow_model, "resolution")
-            col = layout.column(align=True)
-            col.operator("mesh.loft")
-            col.prop(sce.sailflow_model, "steps")
-            col.prop(sce.sailflow_model, "spans")
-            col = layout.column(align=True)
-
-        if sce.sailflow_model.t != "DAT":
-            row = col.row(align=True)
-            row.prop(sce.sailflow_model, "twist")
-            row.prop(sce.sailflow_model, "tw")
-            row = col.row(align=True)
-            row.prop(sce.sailflow_model, "ellipDis")
-            row = col.row(align=True)
-            row.prop(sce.sailflow_model, "ellipAmount")
-            row = col.row(align=True)
-            row.prop(sce.sailflow_model, "ellipCenter")
-            row = col.row(align=True)
-            row.prop(sce.sailflow_model, "shrink")
-
-        #
-        #       col = layout.column(align=True)
-        if sce.sailflow_model.t != "DAT":
-            col.label(text="Operation:")
-            col.operator("mesh.airprof")
-
-        if sce.sailflow_model.t == 'NACA':
-            box = layout.box()
-            angleIn = atan(2 * sce.sailflow_model.m / sce.sailflow_model.p) * 180 / 3.14159
-            angleOut = -atan(2 * sce.sailflow_model.m / 100 / (sce.sailflow_model.p / 100 - 1)) * 180 / 3.14159
-            box.label(text="Angle in  " + str(round(angleIn, 2)))
-            box.label(text="Angle out " + str(round(angleOut, 2)))
-
-
-class VIEW3D_PT_flattener_parameters(bpy.types.Panel):
-    bl_label = "Flattener Parameters"
-    bl_space_type = "VIEW_3D"
-    bl_region_type = "TOOLS"
-    bl_category = "Sailflow Design"
-    bpy.types.Object.obj_property = bpy.props.FloatProperty(name="ObjectProperty")
-
-    def areaSelectedFaces(self, obj):
-        if obj == None:
-            return 0
-        if obj.type != 'MESH':
-            return 0
-        pols = obj.data.polygons
-        polsSel = [p for p in pols if p.select]
-
-        area = 0.0
-        for p in polsSel:
-            area += p.area
-        return area
-
-    def draw(self, context):
-        sce = bpy.context.scene
-        layout = self.layout
-        col = layout.column(align=True)
-
-        col.prop(sce.sailflow_model, "energyMinimizer")
-        col.prop(sce.sailflow_model, "deltaDeformation")
-        col.prop(sce.sailflow_model, "maxDeformation")
-        col.prop(sce.sailflow_model, "useSeed")
-        col.prop(sce.sailflow_model, "polSeed")
-        col.prop(sce.sailflow_model, "resEnergy")
-
-        col = layout.column(align=True)
-        col.operator("mesh.flattener")
-        box = layout.box()
-
-        areaS = self.areaSelectedFaces(bpy.context.active_object)
-        areaF = self.areaSelectedFaces(flatObj)
-
-        box.label(text="Area panel on sail m^2 =" + str(round(areaS, 5)))
-        box.label(text="Area panel flatten m^2 =" + str(round(areaF, 5)))
-        box.label(text="Total area diff   cm^2 =" + str(round((areaF - areaS) * 10 ** 4, 1)))
-
-
-class VIEW3D_PT_airprofile_print(bpy.types.Panel):
-    bl_label = "Printout Generation"
-    bl_space_type = "VIEW_3D"
-    bl_region_type = "TOOLS"
-    bl_category = "Sailflow Design"
-
-    def draw(self, context):
-        sce = bpy.context.scene
-        layout = self.layout
-        col = layout.column(align=True)
-
-        col.prop(sce.sailflow_model, "paperFormat")
-        col.prop(sce.sailflow_model, "freeText")
-        col.prop(sce.sailflow_model, "multiPages")
-        col.prop(sce.sailflow_model, "margin")
-        col.prop(sce.sailflow_model, "overlap")
-
-        if sce.sailflow_model.paperFormat == 'Other':
-            col.prop(sce.sailflow_model, "paperWidth")
-            col.prop(sce.sailflow_model, "paperHeight")
-
-        col = layout.column(align=True)
-        col.operator("mesh.print_pdf")
-        #
-        # Print in ASCII
-        #
-        col = layout.column(align=True)
-        col.prop(sce.sailflow_model, "asciiDx")
-        col.operator("mesh.print_ascii")
-
-
-class VIEW3D_PT_analyse(bpy.types.Panel):
-    bl_label = "Analyse sail"
-    bl_space_type = "VIEW_3D"
-    bl_region_type = "TOOLS"
-    bl_category = "Sailflow Design"
-
-    def draw(self, context):
-        sce = bpy.context.scene
-        layout = self.layout
-        col = layout.column(align=True)
-        col.operator("mesh.colorit")
-
+    def execute(self, context):
+        panel = bpy.context.active_object
+        if "SailPanel" not in panel.name:
+            self.report({'ERROR'}, 'You must select one panel')
+            return {'FINISHED'}
+        parent = bpy.data.objects[panel.sailPanelParent]
+        bpy.context.scene.objects.active = parent
+        bpy.ops.object.mode_set(mode='EDIT')
+        # First deselect all the faces
+        bpy.ops.mesh.select_all(action='TOGGLE')
+        bpy.ops.object.mode_set(mode='OBJECT')
+        for sailPanel in panel.sailPanel:
+            parent.data.polygons[sailPanel.face].select = True
+        bpy.ops.object.mode_set(mode='EDIT')
+        return {'FINISHED'}
 
 class colorIt(bpy.types.Operator):
     bl_idname = "mesh.colorit"
@@ -2018,6 +1919,159 @@ class AirFoilSettings(bpy.types.PropertyGroup):
 
     curvePoints = []
     curveName = bpy.props.StringProperty(name="object name")
+
+
+class VIEW3D_PT_airprofile_parameters(bpy.types.Panel):
+    bl_label = "Profile Parameters"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "TOOLS"
+    bl_category = "Sailflow Design"
+
+    def draw(self, context):
+        sce = bpy.context.scene
+        layout = self.layout
+        col = layout.column(align=True)
+        col.prop(sce.sailflow_model, "t")
+
+        if sce.sailflow_model.t == 'NACA':
+            col = layout.column(align=True)
+            col.prop(sce.sailflow_model, "m")
+            col.prop(sce.sailflow_model, "p")
+
+        elif sce.sailflow_model.t == "CUSTOM":
+            col.operator("mesh.load_library")
+            col = layout.column(align=True)
+
+        elif sce.sailflow_model.t == "CURVE":
+            col.operator("mesh.curve_aquire")
+            col = layout.column(align=True)
+
+        elif sce.sailflow_model.t == "DAT":
+            col.operator("mesh.curve_load")
+            col.prop(sce.sailflow_model, "resolution")
+            col = layout.column(align=True)
+            col.operator("mesh.loft")
+            col.prop(sce.sailflow_model, "steps")
+            col.prop(sce.sailflow_model, "spans")
+            col = layout.column(align=True)
+
+        if sce.sailflow_model.t != "DAT":
+            row = col.row(align=True)
+            row.prop(sce.sailflow_model, "twist")
+            row.prop(sce.sailflow_model, "tw")
+            row = col.row(align=True)
+            row.prop(sce.sailflow_model, "ellipDis")
+            row = col.row(align=True)
+            row.prop(sce.sailflow_model, "ellipAmount")
+            row = col.row(align=True)
+            row.prop(sce.sailflow_model, "ellipCenter")
+            row = col.row(align=True)
+            row.prop(sce.sailflow_model, "shrink")
+
+        #
+        #       col = layout.column(align=True)
+        if sce.sailflow_model.t != "DAT":
+            col.label(text="Operation:")
+            col.operator("mesh.airprof")
+
+        if sce.sailflow_model.t == 'NACA':
+            box = layout.box()
+            if sce.sailflow_model.p != 0:
+                angleIn = atan(2 * sce.sailflow_model.m / sce.sailflow_model.p) * 180 / 3.14159
+                angleOut = -atan(2 * sce.sailflow_model.m / 100 / (sce.sailflow_model.p / 100 - 1)) * 180 / 3.14159
+            else:
+                angleIn = 0.0
+                angleOut = 0.0
+            box.label(text="Angle in  " + str(round(angleIn, 2)))
+            box.label(text="Angle out " + str(round(angleOut, 2)))
+
+class VIEW3D_PT_flattener_parameters(bpy.types.Panel):
+    bl_label = "Flattener Parameters"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "TOOLS"
+    bl_category = "Sailflow Design"
+    bpy.types.Object.obj_property = bpy.props.FloatProperty(name="ObjectProperty")
+
+    def areaSelectedFaces(self, obj):
+        if obj == None:
+            return 0
+        if obj.type != 'MESH':
+            return 0
+        pols = obj.data.polygons
+        polsSel = [p for p in pols if p.select]
+
+        area = 0.0
+        for p in polsSel:
+            area += p.area
+        return area
+
+    def draw(self, context):
+        sce = bpy.context.scene
+        layout = self.layout
+        col = layout.column(align=True)
+
+        col.prop(sce.sailflow_model, "energyMinimizer")
+        col.prop(sce.sailflow_model, "deltaDeformation")
+        col.prop(sce.sailflow_model, "maxDeformation")
+        col.prop(sce.sailflow_model, "useSeed")
+        col.prop(sce.sailflow_model, "polSeed")
+        col.prop(sce.sailflow_model, "resEnergy")
+
+        col = layout.column(align=True)
+        col.operator("mesh.flattener")
+        col.operator("mesh.highlight")
+        box = layout.box()
+
+        areaS = self.areaSelectedFaces(bpy.context.active_object)
+        areaF = self.areaSelectedFaces(flatObj)
+        flatObj.areaSail = areaS
+        flatObj.areaFlatten = areaF
+
+        box.label(text="Area panel on sail m^2 =" + str(round(areaS, 5)))
+        box.label(text="Area panel flatten m^2 =" + str(round(areaF, 5)))
+        box.label(text="Total area diff   cm^2 =" + str(round((areaF - areaS) * 10 ** 4, 1)))
+
+class VIEW3D_PT_airprofile_print(bpy.types.Panel):
+    bl_label = "Printout Generation"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "TOOLS"
+    bl_category = "Sailflow Design"
+
+    def draw(self, context):
+        sce = bpy.context.scene
+        layout = self.layout
+        col = layout.column(align=True)
+
+        col.prop(sce.sailflow_model, "paperFormat")
+        col.prop(sce.sailflow_model, "freeText")
+        col.prop(sce.sailflow_model, "multiPages")
+        col.prop(sce.sailflow_model, "margin")
+        col.prop(sce.sailflow_model, "overlap")
+
+        if sce.sailflow_model.paperFormat == 'Other':
+            col.prop(sce.sailflow_model, "paperWidth")
+            col.prop(sce.sailflow_model, "paperHeight")
+
+        col = layout.column(align=True)
+        col.operator("mesh.print_pdf")
+        #
+        # Print in ASCII
+        #
+        col = layout.column(align=True)
+        col.prop(sce.sailflow_model, "asciiDx")
+        col.operator("mesh.print_ascii")
+
+class VIEW3D_PT_analyse(bpy.types.Panel):
+    bl_label = "Analyse sail"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "TOOLS"
+    bl_category = "Sailflow Design"
+
+    def draw(self, context):
+        sce = bpy.context.scene
+        layout = self.layout
+        col = layout.column(align=True)
+        col.operator("mesh.colorit")
 
 
 def select():
