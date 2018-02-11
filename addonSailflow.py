@@ -9,6 +9,11 @@ bl_info = {
     "warning": "",
     "category": "Add Mesh"}
 
+import sys
+import os
+sys.path.append("E:\\Users\\Luca\\sailFlow")
+from sail_utils import *
+
 import imp
 from math import *
 import math
@@ -20,17 +25,7 @@ from bpy.props import FloatProperty, IntProperty, EnumProperty, BoolProperty, St
 from bpy.types import PropertyGroup, Panel, Object, Operator
 from fpdf import FPDF
 from mathutils import Vector, Euler, geometry
-import mathutils
 from mathutils.geometry import interpolate_bezier
-
-# import pydevd
-
-
-# PYDEV_SOURCE_DIR = 'C:/eclipse/plugins/org.python.pydev_3.4.1.201403181715/pysrc'
-
-# if sys.path.count(PYDEV_SOURCE_DIR) < 1:
-#   sys.path.append(PYDEV_SOURCE_DIR)
-
 
 custom_profile = None
 
@@ -50,71 +45,6 @@ bpy.utils.register_class(sailPanelInfoClass)
 
 Object.sailPanel = CollectionProperty(type=sailPanelInfoClass)
 Object.sailPanelParent = StringProperty(name='Panel parent object')
-Object.areaSail = FloatProperty(name='Area orginal sail')
-Object.areaFlatten = FloatProperty(name='Area orginal sail')
-
-def extractPerimeterEdges(m):
-    el = []
-    perifEdgeList = []
-    for p in m.data.polygons:
-        for e in p.edge_keys:
-            if e[0] > e[1]:
-                el.append((e[1], e[0]))
-            else:
-                el.append(e)
-    while el:
-        e = el.pop()
-        if e in el:
-            el.remove(e)
-        else:
-            perifEdgeList.append(e)
-    return perifEdgeList
-
-
-def profile(x, m, p):
-    # =====================================================================================
-    # The profile calculator
-    #
-    # inputs
-    #   x  : point in the range 0 to 1 to calculate
-    #   m : camber percentage
-    #   p : camber position percentage
-    # =====================================================================================
-    if (x < 0):
-        return 0
-    if (x > 1):
-        return 0
-    if (x < p):
-        y = (m / (p * p)) * (2 * p * x - x * x);
-    else:
-        y = (m / ((1 - p) * (1 - p))) * ((1 - 2 * p) + 2 * p * x - x * x);
-    # debug(("Profile return Z="+str(y))
-    return y
-
-
-def curveProfile(x, vxs):
-    for i in vxs:
-        if i[0] > x:
-            return i[1]
-    return 0
-
-
-def extractPerimeterEdges(obj):
-    el = []
-    perifEdgeList = []
-    for p in obj.data.polygons:
-        for e in p.edge_keys:
-            if e[0] > e[1]:
-                el.append((e[1], e[0]))
-            else:
-                el.append(e)
-    while el:
-        e = el.pop()
-        if e in el:
-            el.remove(e)
-        else:
-            perifEdgeList.append(e)
-    return perifEdgeList
 
 
 class MyPoly:
@@ -122,13 +52,15 @@ class MyPoly:
     l2 = 0  # p1 - p2
     l3 = 0  # p2 - p3
 
-    def clockWise(self, co1, co2, co3):
+    @staticmethod
+    def clockWise(co1, co2, co3):
         A = (co2.x - co1.x) * (co2.y + co1.y)
         A = A + (co3.x - co2.x) * (co3.y + co2.y)
         A = A + (co1.x - co3.x) * (co1.y + co3.y)
         return A > 0
 
-    def doubleCircle(self, d, R, r):
+    @staticmethod
+    def doubleCircle(d, R, r):
         x = (d ** 2 - r ** 2 + R ** 2) / (2 * d)
         y = 0.5 * (1 / d) * sqrt(4 * (d ** 2) * (R ** 2) - (d ** 2 - r ** 2 + R ** 2) ** 2)
         return x, y
@@ -463,7 +395,8 @@ class Flattener(bpy.types.Operator):
     bl_label = "Flat surface"
     bl_description = "bla bla bla"
 
-    def findAdjacentNotFlat(self, Polys, p):
+    @staticmethod
+    def findAdjacentNotFlat(Polys, p):
         # debug("findAdj of :"+str(p),3)
         for testP in Polys:
             # debug("...checking "+str(testP),4)
@@ -826,6 +759,7 @@ class Flattener(bpy.types.Operator):
         bpy.context.scene.layers[5] = False
         return {'FINISHED'}
 
+
 class highlightPanel(bpy.types.Operator):
     bl_idname = "mesh.highlight"
     bl_label = "Show Sail Panel"
@@ -850,6 +784,7 @@ class highlightPanel(bpy.types.Operator):
             parent.data.polygons[sailPanel.face].select = True
         bpy.ops.object.mode_set(mode='EDIT')
         return {'FINISHED'}
+
 
 class colorIt(bpy.types.Operator):
     bl_idname = "mesh.colorit"
@@ -1014,287 +949,22 @@ class LoftDAT(bpy.types.Operator):
     bl_label = "Loft curves or meshes"
     bl_description = "Loft between mesh or curves"
 
-    @staticmethod
-    def cubic(p, t):
-        return p[0] * (1.0 - t) ** 3.0 + 3.0 * p[1] * t * (1.0 - t) ** 2.0 \
-               + 3.0 * p[2] * (t ** 2.0) * (1.0 - t) + p[3] * t ** 3.0
-
-    def getbezpoints(self, spl, mt, seg=0):
-        points = spl.bezier_points
-        p0 = mt * points[seg].co
-        p1 = mt * points[seg].handle_right
-        p2 = mt * points[seg + 1].handle_left
-        p3 = mt * points[seg + 1].co
-        return p0, p1, p2, p3
-
-    def getnurbspoints(self, spl, mw):
-        pts = []
-        ws = []
-        for p in spl.points:
-            v = Vector(p.co[0:3]) * mw
-            pts.append(v)
-            ws.append(p.weight)
-        return pts, ws
-
-    def knots(self, n, order, type=0):  # 0 uniform 1 endpoints 2 bezier
-
-        kv = []
-
-        t = n + order
-        if type == 0:
-            for i in range(0, t):
-                kv.append(1.0 * i)
-
-        elif type == 1:
-            k = 0.0
-            for i in range(1, t + 1):
-                kv.append(k)
-                if i >= order and i <= n:
-                    k += 1.0
-        elif type == 2:
-            if order == 4:
-                k = 0.34
-                for a in range(0, t):
-                    if a >= order and a <= n: k += 0.5
-                    kv.append(floor(k))
-                    k += 1.0 / 3.0
-
-            elif order == 3:
-                k = 0.6
-                for a in range(0, t):
-                    if a >= order and a <= n: k += 0.5
-                    kv.append(floor(k))
-
-        ##normalize the knot vector
-        for i in range(0, len(kv)):
-            kv[i] = kv[i] / kv[-1]
-
-        return kv
-
-    def B(self, i, k, t, knots):
-        ret = 0
-        if k > 0:
-            n1 = (t - knots[i]) * self.B(i, k - 1, t, knots)
-            d1 = knots[i + k] - knots[i]
-            n2 = (knots[i + k + 1] - t) * self.B(i + 1, k - 1, t, knots)
-            d2 = knots[i + k + 1] - knots[i + 1]
-            if d1 > 0.0001 or d1 < -0.0001:
-                a = n1 / d1
-            else:
-                a = 0
-            if d2 > 0.0001 or d2 < -0.0001:
-                b = n2 / d2
-            else:
-                b = 0
-            ret = a + b
-            # print "B i = %d, k = %d, ret = %g, a = %g, b = %g\n"%(i,k,ret,a,b)
-        else:
-            if knots[i] <= t and t <= knots[i + 1]:
-                ret = 1
-            else:
-                ret = 0
-        return ret
-
-    def C(self, t, order, points, weights, knots):
-        # c = Point([0,0,0])
-        c = Vector()
-        rational = 0
-        i = 0
-        while i < len(points):
-            b = self.B(i, order, t, knots)
-            p = points[i] * (b * weights[i])
-            c = c + p
-            rational = rational + b * weights[i]
-            i = i + 1
-
-        return c * (1.0 / rational)
-
-    # Return the coordinate of a point at t percentage
-    # of the entire line
-    def calct(self, obj, t):
-
-        if obj.type == 'CURVE':
-            spl = None
-            mw = obj.matrix_world
-            if obj.data.splines.active is None:
-                if len(obj.data.splines) > 0:
-                    spl = obj.data.splines[0]
-            else:
-                spl = obj.data.splines.active
-
-            if spl is None:
-                return False
-
-            if spl.type == "BEZIER":
-                points = spl.bezier_points
-                nsegs = len(points) - 1
-
-                d = 1.0 / nsegs
-                seg = int(t / d)
-                t1 = t / d - int(t / d)
-
-                if t == 1:
-                    seg -= 1
-                    t1 = 1.0
-
-                p = self.getbezpoints(spl, mw, seg)
-
-                coord = self.cubic(p, t1)
-                return coord
-
-            elif spl.type == "NURBS":
-                data = self.getnurbspoints(spl, mw)
-                pts = data[0]
-                ws = data[1]
-                order = spl.order_u
-                n = len(pts)
-                ctype = spl.use_endpoint_u
-                kv = self.knots(n, order, ctype)
-
-                coord = self.C(t, order - 1, pts, ws, kv)
-
-                return coord
-        elif obj.type == 'MESH':
-            if t == 1:
-                t = 0.999
-            mw = obj.matrix_world
-            vNum = len(obj.data.vertices)
-            vidx = int(vNum * t)
-            t1 = vNum * t - int(vNum * t)
-            print(
-                "CALCT: The object", obj.name, " has num vertices=", vNum, ' index calculated is=', vidx, "with a t=",
-                t,
-                "and t1=", t1)
-            if vidx == 0:
-                coord = mw * (
-                    (obj.data.vertices[vidx + 1].co - obj.data.vertices[vidx].co) * t1 + obj.data.vertices[vidx].co)
-            else:
-                coord = mw * (
-                    (obj.data.vertices[vidx].co - obj.data.vertices[vidx - 1].co) * t1 + obj.data.vertices[vidx - 1].co)
-            print("CALCT: returning the coordinate", coord)
-            return coord
-        else:
-            assert false
-
-    def intc(self, objs, i, t, tr, tipo=3, tension=0.0, bias=0.0):
-
-        ncurves = len(objs)
-
-        # if 2 curves go to linear interpolation regardless the one you choose
-        if ncurves < 3:
-            return self.intl(objs, i, t, tr)
-        else:
-
-            # calculates the points to be interpolated on each curve
-            if i == 0:
-                p0 = self.calct(objs[i], t)
-                p1 = p0
-                p2 = self.calct(objs[i + 1], t)
-                p3 = self.calct(objs[i + 2], t)
-            else:
-                if ncurves - 2 == i:
-                    p0 = self.calct(objs[i - 1], t)
-                    p1 = self.calct(objs[i], t)
-                    p2 = self.calct(objs[i + 1], t)
-                    p3 = p2
-                else:
-                    p0 = self.calct(objs[i - 1], t)
-                    p1 = self.calct(objs[i], t)
-                    p2 = self.calct(objs[i + 1], t)
-                    p3 = self.calct(objs[i + 2], t)
-
-        # calculates the interpolation between those points
-        # i used methods from this page: http://paulbourke.net/miscellaneous/interpolation/
-
-        if tipo == 0:
-            # linear
-            return self.intl(objs, i, t, tr)
-        elif tipo == 1:
-            # natural cubic
-            t2 = tr * tr
-            a0 = p3 - p2 - p0 + p1
-            a1 = p0 - p1 - a0
-            a2 = p2 - p0
-            a3 = p1
-            return a0 * tr * t2 + a1 * t2 + a2 * tr + a3
-        elif tipo == 2:
-            # catmull it seems to be working. ill leave it for now.
-            t2 = tr * tr
-            a0 = -0.5 * p0 + 1.5 * p1 - 1.5 * p2 + 0.5 * p3
-            a1 = p0 - 2.5 * p1 + 2 * p2 - 0.5 * p3
-            a2 = -0.5 * p0 + 0.5 * p2
-            a3 = p1
-            return a0 * tr * tr + a1 * t2 + a2 * tr + a3
-
-        elif tipo == 3:
-            # hermite
-            tr2 = tr * tr
-            tr3 = tr2 * tr
-            m0 = (p1 - p0) * (1 + bias) * (1 - tension) / 2
-            m0 += (p2 - p1) * (1 - bias) * (1 - tension) / 2
-            m1 = (p2 - p1) * (1 + bias) * (1 - tension) / 2
-            m1 += (p3 - p2) * (1 - bias) * (1 - tension) / 2
-            a0 = 2 * tr3 - 3 * tr2 + 1
-            a1 = tr3 - 2 * tr2 + tr
-            a2 = tr3 - tr2
-            a3 = -2 * tr3 + 3 * tr2
-
-            return a0 * p1 + a1 * m0 + a2 * m1 + a3 * p2
-
-    def intl(self, objs, i, t, tr):
-        p1 = self.calct(objs[i], t)
-        p2 = self.calct(objs[i + 1], t)
-
-        r = p1 + (p2 - p1) * tr
-
-        return r
-
-    def loft(self, objs, steps, spans, interpolation=0, tension=0.0, bias=0.5):
-        verts = []
-
-        # for each object
-        for i in range(0, len(objs)):
-            # For each step
-            for j in range(0, steps + 1):
-                # t = percentage of steps according to j
-                t = 1.0 * j / steps
-                # verts filled in with the coordinate at the
-                # point t of the curve
-                verts.append(self.calct(objs[i], t))
-
-            temp2 = []
-            if i < len(objs) - 1:
-                for l in range(1, spans):
-                    tr = 1.0 * l / spans
-                    for k in range(0, steps + 1):
-                        t = 1.0 * k / steps
-                        if interpolation:
-                            pos = self.intc(objs, i, t, tr, tipo=interpolation, tension=tension, bias=bias)
-                        else:
-                            pos = self.intl(objs, i, t, tr)
-
-                        temp2.append(pos)
-                verts.extend(temp2)
-        return verts
 
     def execute(self, context):
         print("Called Loft")
         sce = context.scene
         objs = bpy.selection
-        print(objs)
         spans = sce.sailflow_model.spans
         steps = sce.sailflow_model.steps
 
         intype = 2  # no interpolation
 
-        verts = self.loft(objs, steps, spans, intype)
+        verts = loft(objs, steps, spans, intype)
 
         nfaces = steps * spans * (len(objs) - 1)
         faces = []
         for i in range(0, nfaces):
             d = int(i / steps)
-            # f = [i + d, i + d + 1, i + d + steps + 2, i + d + steps + 1]
-            # inverts normals
             f = [i + d, i + d + steps + 1, i + d + steps + 2, i + d + 1]
             faces.append(f)
 
@@ -1561,6 +1231,8 @@ class AirProfile(bpy.types.Operator):
                 x2 = self.getXinEdge(a.data.vertices, e2, v.y)
                 leftx = min(x1, x2)
                 rightx = max(x1, x2)
+                # x is percent of the span at the point of
+                # v.x
                 x = (v.x - leftx) / (rightx - leftx + 0.0001)
                 if v.index in vxsInPe:
                     y = 0.0
@@ -1571,6 +1243,16 @@ class AirProfile(bpy.types.Operator):
                 elif ctype == 'CUSTOM':
                     heightPerc = (v.y - miny) / (maxy - miny)
                     y = custom_profile.profile(x, heightPerc, v.co.x, v.co.y, miny, maxy)
+                elif ctype == 'INTERP':
+                    ob1 = bpy.data.objects['Bezier']
+                    ob2 = bpy.data.objects['Bezier.001']
+                    ob2 = bpy.data.objects['Bezier.002']
+                    objs = (ob1,ob2,ob3)
+                    p1 = 0.25
+                    p2 = 0.5
+                    p3 = 0.75
+
+
                 if ellipDis:
                     y = y * sqrt(1 - ((v.y - halfSpanY) / halfSpan) ** 2)
 
@@ -1851,7 +1533,8 @@ class AirFoilSettings(bpy.types.PropertyGroup):
         ("NACA", "Naca 4", "", 1),
         ("CUSTOM", "Profile on routine", "", 2),
         ("DAT", "Load DAT and/or lofting", "", 3),
-        ("CURVE", "Profile Bezier or Mesh", "", 4)
+        ("CURVE", "Bezier or Mesh", "", 4),
+        ("INTERP", "Interpolation", "", 5)
     ]
     m = IntProperty(
         name="% Max Camber",
@@ -1938,10 +1621,6 @@ class VIEW3D_PT_airprofile_parameters(bpy.types.Panel):
             col.prop(sce.sailflow_model, "m")
             col.prop(sce.sailflow_model, "p")
 
-        elif sce.sailflow_model.t == "CUSTOM":
-            col.operator("mesh.load_library")
-            col = layout.column(align=True)
-
         elif sce.sailflow_model.t == "CURVE":
             col.operator("mesh.curve_aquire")
             col = layout.column(align=True)
@@ -2024,8 +1703,6 @@ class VIEW3D_PT_flattener_parameters(bpy.types.Panel):
 
         areaS = self.areaSelectedFaces(bpy.context.active_object)
         areaF = self.areaSelectedFaces(flatObj)
-        flatObj.areaSail = areaS
-        flatObj.areaFlatten = areaF
 
         box.label(text="Area panel on sail m^2 =" + str(round(areaS, 5)))
         box.label(text="Area panel flatten m^2 =" + str(round(areaF, 5)))
