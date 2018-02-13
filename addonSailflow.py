@@ -1243,19 +1243,17 @@ class AirProfile(bpy.types.Operator):
                 x2 = self.getXinEdge(a.data.vertices, e2, v.y)
                 leftx = min(x1, x2)
                 rightx = max(x1, x2)
-                # x is percent of the span at the point of
-                # v.x
-                widthPerc = (v.x - leftx) / (rightx - leftx + 0.0001)
-                heightPerc = (v.y - miny) / (maxy - miny)
+                x = (v.x - leftx) / (rightx - leftx + 0.0001)
                 if v.index in vxsInPe:
                     y = 0.0
                 elif ctype == 'NACA':
-                    y = profile(widthPerc, mp, pp)
+                    y = profile(x, mp, pp)
                 elif ctype == 'CURVE':
-                    y = curveProfile(widthPerc, sce.sailflow_model.curvePoints)
+                    y = curveProfile(x, sce.sailflow_model.curvePoints)
                 elif ctype == 'CUSTOM':
-                    y = custom_profile.profile(widthPerc, heightPerc, v.co.x, v.co.y, miny, maxy)
-                 if ellipDis:
+                    heightPerc = (v.y - miny) / (maxy - miny)
+                    y = custom_profile.profile(x, heightPerc, v.co.x, v.co.y, miny, maxy)
+                if ellipDis:
                     y = y * sqrt(1 - ((v.y - halfSpanY) / halfSpan) ** 2)
 
                 v.z = y * (rightx - leftx) * XshrinkFactor
