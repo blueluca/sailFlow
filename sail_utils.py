@@ -161,17 +161,12 @@ def calct(obj, t):
         vNum = len(obj.data.vertices)
         vidx = int(vNum * t)
         t1 = vNum * t - int(vNum * t)
-        print(
-            "CALCT: The object", obj.name, " has num vertices=", vNum, ' index calculated is=', vidx, "with a t=",
-            t,
-            "and t1=", t1)
         if vidx == 0:
             coord = mw * (
                     (obj.data.vertices[vidx + 1].co - obj.data.vertices[vidx].co) * t1 + obj.data.vertices[vidx].co)
         else:
             coord = mw * (
                     (obj.data.vertices[vidx].co - obj.data.vertices[vidx - 1].co) * t1 + obj.data.vertices[vidx - 1].co)
-        print("CALCT: returning the coordinate", coord)
         return coord
     else:
         assert false
@@ -245,9 +240,9 @@ def intl(objs, i, t, tr):
     return r
 
 
-def loft(objs, steps, spans, interpolation=0, tension=0.0, bias=0.5):
-    verts = []
+def loft(objs, steps, spans, interpolation=0, tension=0.0, bias=0.5,flatmargin=0):
 
+    vertxList = []
     # for each object
     for i in range(0, len(objs)):
         # For each step
@@ -256,7 +251,7 @@ def loft(objs, steps, spans, interpolation=0, tension=0.0, bias=0.5):
             stepPercent = 1.0 * j / steps
             # verts filled in with the coordinate at the
             # point t of the curve
-            verts.append(calct(objs[i], stepPercent))
+            vertxList.append(calct(objs[i], stepPercent))
         temp2 = []
         if i < len(objs) - 1:
             for l in range(1, spans):
@@ -264,14 +259,18 @@ def loft(objs, steps, spans, interpolation=0, tension=0.0, bias=0.5):
                 for k in range(0, steps + 1):
                     stepPercent = 1.0 * k / steps
                     if interpolation:
-                        pos = intc(objs, i, stepPercent, spanPercent, tipo=interpolation, tension=tension,
+                        if flatmargin < k < steps-flatmargin+1:
+                            pos = intc(objs, i, stepPercent, spanPercent,
+                                       tipo=interpolation, tension=tension,
                                         bias=bias)
+                        else:
+                            pos = intc(objs, i, stepPercent, spanPercent,tipo=0)
                     else:
                         pos = intl(objs, i, stepPercent, spanPercent)
 
                     temp2.append(pos)
-            verts.extend(temp2)
-    return verts
+            vertxList.extend(temp2)
+    return vertxList
 
 
 def profile(x, m, p):
