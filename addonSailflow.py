@@ -25,7 +25,7 @@ from bpy.props import FloatProperty, IntProperty, EnumProperty, BoolProperty, St
 from bpy.types import PropertyGroup, Panel, Object, Operator
 from fpdf import FPDF
 from mathutils import Vector, Euler, geometry
-from mathutils.geometry import interpolate_bezier
+from mathutils.geometry import interpolate_bezier, intersect_line_line_2d
 
 custom_profile = None
 
@@ -956,10 +956,22 @@ class LoftDAT(bpy.types.Operator):
         objs = bpy.selection
         spans = sce.sailflow_model.spans
         steps = sce.sailflow_model.steps
+        tension = sce.sailflow_model.tension
+        bias = sce.sailflow_model.bias
+        flatmargin = sce.sailflow_model.flatmargin
+        interpType = sce.sailflow_model.interpType
 
-        intype = 2  # no interpolation
-
-        verts = loft(objs, steps, spans, intype)
+        if interpType == "LINEAR":
+            intype = 0
+        elif interpType == "CUBIC":
+            intype = 1
+        elif interpType == "CATMULK":
+            intype = 2
+        else:
+            intype = 3
+        print("intType = ",intype)
+        print(sce.sailflow_model.interpType)
+        verts = loft(objs, steps, spans, interpolation=intype,tension=tension,bias=bias,flatmargin=flatmargin)
 
         nfaces = steps * spans * (len(objs) - 1)
         faces = []
@@ -1233,27 +1245,17 @@ class AirProfile(bpy.types.Operator):
                 rightx = max(x1, x2)
                 # x is percent of the span at the point of
                 # v.x
-                x = (v.x - leftx) / (rightx - leftx + 0.0001)
+                widthPerc = (v.x - leftx) / (rightx - leftx + 0.0001)
+                heightPerc = (v.y - miny) / (maxy - miny)
                 if v.index in vxsInPe:
                     y = 0.0
                 elif ctype == 'NACA':
-                    y = profile(x, mp, pp)
+                    y = profile(widthPerc, mp, pp)
                 elif ctype == 'CURVE':
-                    y = curveProfile(x, sce.sailflow_model.curvePoints)
+                    y = curveProfile(widthPerc, sce.sailflow_model.curvePoints)
                 elif ctype == 'CUSTOM':
-                    heightPerc = (v.y - miny) / (maxy - miny)
-                    y = custom_profile.profile(x, heightPerc, v.co.x, v.co.y, miny, maxy)
-                elif ctype == 'INTERP':
-                    ob1 = bpy.data.objects['Bezier']
-                    ob2 = bpy.data.objects['Bezier.001']
-                    ob2 = bpy.data.objects['Bezier.002']
-                    objs = (ob1,ob2,ob3)
-                    p1 = 0.25
-                    p2 = 0.5
-                    p3 = 0.75
-
-
-                if ellipDis:
+                    y = custom_profile.profile(widthPerc, heightPerc, v.co.x, v.co.y, miny, maxy)
+                 if ellipDis:
                     y = y * sqrt(1 - ((v.y - halfSpanY) / halfSpan) ** 2)
 
                 v.z = y * (rightx - leftx) * XshrinkFactor
@@ -1497,7 +1499,7 @@ class outputAscii(bpy.types.Operator):
         xscan = xmin
         while xscan <= xmax:
             for e in pes:
-                iv = mathutils.geometry.intersect_line_line_2d(Vector((xscan, ymin - 1, 0)), \
+                iv = intersect_line_line_2d(Vector((xscan, ymin - 1, 0)), \
                                                                Vector((xscan, ymax + 1, 0)), \
                                                                vxs[e[0]].co, vxs[e[1]].co)
                 if iv:
@@ -1536,6 +1538,13 @@ class AirFoilSettings(bpy.types.PropertyGroup):
         ("CURVE", "Bezier or Mesh", "", 4),
         ("INTERP", "Interpolation", "", 5)
     ]
+    interpTypesList = [
+        ("LINEAR","Linear","",1),
+        ("CUBIC","Cubic","",2),
+        ("CATMULK","Catmulk","",3),
+        ("HERMITE","Hermite","",4)
+    ]
+
     m = IntProperty(
         name="% Max Camber",
         description="Maximum Camber (% of chord)",
@@ -1550,7 +1559,10 @@ class AirFoilSettings(bpy.types.PropertyGroup):
         max=70)
 
     t = EnumProperty(name="Curve", default="NACA", items=curveTypes)
-
+    interpType = EnumProperty(name="Interpolation", default="LINEAR", items=interpTypesList)
+    tension = FloatProperty(name="Tension",default=0.0,min=0.0,max=1.0)
+    bias = FloatProperty(name="Bias",default=0.0,min=0.0,max=1.0)
+    flatmargin = IntProperty(name="Flat margin",default=1,max=10)
     shrink = BoolProperty(name="Apply Shrink", default=False)
     curve = BoolProperty(name="Apply Curve", default=False)
     twist = BoolProperty(name="Apply Twist", default=False)
@@ -1633,6 +1645,11 @@ class VIEW3D_PT_airprofile_parameters(bpy.types.Panel):
             col.prop(sce.sailflow_model, "steps")
             col.prop(sce.sailflow_model, "spans")
             col = layout.column(align=True)
+            col.prop(sce.sailflow_model,"interpType")
+            if sce.sailflow_model.interpType == "HERMITE":
+                col.prop(sce.sailflow_model,"tension")
+                col.prop(sce.sailflow_model,"bias")
+            col.prop(sce.sailflow_model,"flatmargin")
 
         if sce.sailflow_model.t != "DAT":
             row = col.row(align=True)
