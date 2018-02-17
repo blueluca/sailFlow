@@ -652,11 +652,14 @@ class Flattener(bpy.types.Operator):
         if Flattened:
             del Flattened[:]
         if sce.sailflow_model.useSeed == False:
+            lis = [(p.area,p.index) for p in polys]
+            max_index = max(lis, key=lambda item: item[0])[1]
+            print("Selected ",max_index)
             sce.sailflow_model.resEnergy = self.makeFlattened(bpy.context.active_object,
                                                               sce.sailflow_model.energyMinimizer,
                                                               sce.sailflow_model.maxDeformation,
                                                               sce.sailflow_model.deltaDeformation,
-                                                              -1)
+                                                              max_index)
         else:
             sce.sailflow_model.resEnergy = self.makeFlattened(bpy.context.active_object,
                                                               sce.sailflow_model.energyMinimizer,
