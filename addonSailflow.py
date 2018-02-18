@@ -638,8 +638,8 @@ class Flattener(bpy.types.Operator):
         bpy.context.active_object.update_from_editmode()
         # Check if all selected faces are triangles
         # before start
-        obj = bpy.context.active_object
-        polys = obj.data.polygons
+        sail_object = bpy.context.active_object
+        polys = sail_object.data.polygons
         for p in polys:
             if p.select and len(p.vertices) > 3:
                 self.report({'ERROR'}, 'Not all faces are triangles STOPPED')
@@ -690,76 +690,85 @@ class Flattener(bpy.types.Operator):
         fmesh.from_pydata(vertices, [], faces)
         # Update the displayed mesh with the new data
         fmesh.update()
-        fobj = bpy.data.objects.new("SailPanel", fmesh)
+        flatObj = bpy.data.objects.new("SailPanel", fmesh)
         #        fobj.matrix_world = bpy.context.active_object.matrix_world
-        fobj.scale = bpy.context.active_object.scale
-        bpy.context.scene.objects.link(fobj)
+        flatObj.scale = bpy.context.active_object.scale
+        bpy.context.scene.objects.link(flatObj)
         # Set object location and layers num 6
-        fobj.layers[5] = True
-        fobj.layers[0] = False
+        # flatObj.layers[5] = True
+        # flatObj.layers[0] = False
         #Create list of vectors for the perimiter edges
+        # ----------------------------------------------------------------- START ROTATION
         vectors = []
-        for e in extractPerimeterEdges(fobj):
-            if fobj.data.vertices[e[0]].co not in vectors:
-                vectors.append(Vector(fobj.data.vertices[e[0]].co))
-            if fobj.data.vertices[e[1]].co not in vectors:
-                vectors.append(Vector(fobj.data.vertices[e[1]].co))
+        for e in extractPerimeterEdges(flatObj):
+            if flatObj.data.vertices[e[0]].co not in vectors:
+                vectors.append(Vector(flatObj.data.vertices[e[0]].co))
+            if flatObj.data.vertices[e[1]].co not in vectors:
+                vectors.append(Vector(flatObj.data.vertices[e[1]].co))
         angle, box = minimizeBoundingBoxVec(vectors)
-        # Check the bounding box to ensure we dispose it vertical
-        if (box[0]-box[1]) > (box[2]-box[3]):
+        # Check the bounding box to ensure we dispose it horizontal
+        if (box[0]-box[1]) < (box[2]-box[3]):
             #x is the major axis
             angle = angle+90
-        print("Angle %f" % (angle))
-        fobj.rotation_euler[2] = radians(angle)
+        flatObj.rotation_euler[2] = radians(angle)
         bpy.context.scene.layers[5] = True
         bpy.context.scene.update()
-        flatObj = fobj
+        # ----------------------------------------------------------------- END ROTATION
         # Now add the list of faces that were selected from the sail
         # to be flattened. This property will be used to recall the
         # surfaces when needed
-        for p in obj.data.polygons:
+        for p in sail_object.data.polygons:
             if p.select:
                 flatObj.sailPanel.add()
                 lastSailPanel = len(flatObj.sailPanel)-1
                 flatObj.sailPanel[lastSailPanel].face = p.index
-        flatObj.sailPanelParent = obj.name
+        flatObj.sailPanelParent = sail_object.name
+        # ----------------------------------------------------------------- START PANEL POS
         # Adjust the position to put the last panel beside
-        # the prevous one. Looking to the naming to get the
-        # last panel.
-        if fobj.name != 'SailPanel':
-            # Search the last SailPanel
-            for i in range(1, 10):
-                panelName = 'SailPanel.00' + str(i)
-                if not panelName in bpy.data.objects:
-                    break
-            i = i - 1
-            if i == 1:
-                lastPanel = bpy.data.objects['SailPanel']
-            else:
-                panelName = 'SailPanel.00' + str(i - 1)
-                lastPanel = bpy.data.objects[panelName]
-            # find the bounding box of the last SailPanel
-            print("lastPanel is ", lastPanel.name)
-            bbLP = boundingBox(lastPanel)
-            print("bbLP maxx=%2.2f minx=%2.2f maxy=%2.2f miny=%2.2f"%(bbLP[0],bbLP[1],bbLP[2],bbLP[3]))
+        # the previous one.
+        if flatObj.name != 'SailPanel':
+            # Search the last SailPanel by name
+            # counting a max of 20 panels
+            # and create a list of bounding boxes
+            bb = []
+            for i in range(0, 20):
+                if i is 0:
+                    panelName = 'SailPanel'
+                else:
+                    panelName = 'SailPanel.00' + str(i)
+                if panelName != flatObj.name:
+                    if (panelName in bpy.data.objects):
+                        print("adding ",panelName)
+                        bb.append(boundingBox(bpy.data.objects[panelName]))
+            # [maxx, minx, maxy, miny]
+            # Get the max and min of all
+            bb_maxx = max(bb,key=lambda item:item[0])[0]
+            bb_minx = min(bb,key=lambda item:item[1])[1]
+            bb_maxy = max(bb,key=lambda item:item[2])[2]
+            bb_miny = max(bb,key=lambda item:item[3])[3]
             # find the bounding box of fobj
-            bbFO = boundingBox(fobj)
-            print("bbFO maxx=%2.2f minx=%2.2f maxy=%2.2f miny=%2.2f"%(bbFO[0],bbFO[1],bbFO[2],bbFO[3]))
-            # Align the min Y
-            yFO = bbLP[3]-bbFO[3]
-            # Avoid overal maxx with minx
-            xFO = bbLP[0] - bbFO[1]
+            [fo_maxx,fo_minx,fo_maxy,fo_miny] = boundingBox(flatObj)
+#            print("bbFO maxx=%2.2f minx=%2.2f maxy=%2.2f miny=%2.2f"%(bbFO[0],bbFO[1],bbFO[2],bbFO[3]))
+            # Put the min y the other maxy
+            delta_yFO = bb_maxy-fo_miny+(fo_maxy-fo_miny)/4
+            # Align the Xs
+            delta_xFO = bb_minx-fo_minx
         # else if it is the first panel
         else:
-            xFO = 0
-            yFO = 0
+            [fo_maxx,fo_minx,fo_maxy,fo_miny] = boundingBox(flatObj)
+            [bb_maxx, bb_minx, bb_maxy, bb_miny] = boundingBox(sail_object)
+            delta_yFO = bb_maxy-fo_miny+(fo_maxy-fo_miny)/2
+            # Align the Xs
+            delta_xFO = bb_minx-fo_minx
         # set the location
-        print("location", xFO+fobj.location[0], yFO+fobj.location[1])
-        fobj.location = (xFO+fobj.location[0], yFO+fobj.location[1], 0)
-        bpy.context.scene.layers[5] = True
-        bpy.data.objects[fobj.name].show_name = True
+        # print("deltas x and y",delta_xFO, delta_yFO)
+        # print("OLD location", flatObj.location[0], flatObj.location[1])
+        # print("NEW location", delta_xFO+flatObj.location[0], delta_yFO+flatObj.location[1])
+        flatObj.location = (delta_xFO+flatObj.location[0], delta_yFO+flatObj.location[1], 0)
+        #bpy.context.scene.layers[5] = True
+        bpy.data.objects[flatObj.name].show_name = True
         bpy.context.scene.update()
-        bpy.context.scene.layers[5] = False
+        #bpy.context.scene.layers[5] = False
         return {'FINISHED'}
 
 
@@ -1537,7 +1546,6 @@ class AirFoilSettings(bpy.types.PropertyGroup):
         ("CUSTOM", "Profile on routine", "", 2),
         ("DAT", "Load DAT and/or lofting", "", 3),
         ("CURVE", "Bezier or Mesh", "", 4),
-        ("INTERP", "Interpolation", "", 5)
     ]
     interpTypesList = [
         ("LINEAR","Linear","",1),
@@ -1618,7 +1626,7 @@ class AirFoilSettings(bpy.types.PropertyGroup):
 
 
 class VIEW3D_PT_airprofile_parameters(bpy.types.Panel):
-    bl_label = "Profile Parameters"
+    bl_label = "Profile Generator"
     bl_space_type = "VIEW_3D"
     bl_region_type = "TOOLS"
     bl_category = "Sailflow Design"
@@ -1683,7 +1691,7 @@ class VIEW3D_PT_airprofile_parameters(bpy.types.Panel):
             box.label(text="Angle out " + str(round(angleOut, 2)))
 
 class VIEW3D_PT_flattener_parameters(bpy.types.Panel):
-    bl_label = "Flattener Parameters"
+    bl_label = "Flattener"
     bl_space_type = "VIEW_3D"
     bl_region_type = "TOOLS"
     bl_category = "Sailflow Design"
