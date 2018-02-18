@@ -1016,25 +1016,20 @@ class CurveAquire(bpy.types.Operator):
         knots = sp.bezier_points
         if len(knots) < 2:
             return
-
         # verts per segment
         r = sp.resolution_u + 1
-
         # segments in spline
         segments = len(knots)
-
         if not sp.use_cyclic_u:
             segments -= 1
 
         master_point_list = []
         for i in range(segments):
             inext = (i + 1) % len(knots)
-
             knot1 = knots[i].co
             handle1 = knots[i].handle_right
             handle2 = knots[inext].handle_left
             knot2 = knots[inext].co
-
             bezier = knot1, handle1, handle2, knot2, r
             points = interpolate_bezier(*bezier)
             master_point_list.extend(points)
@@ -1077,6 +1072,20 @@ class CurveAquire(bpy.types.Operator):
                 sce.sailflow_model.curvePoints.append(((v.x - minx) / l, (v.z - miny) / l))
 
         return {'FINISHED'}
+
+
+class CurveAnalyze(Operator):
+    bl_idname = "mesh.curve_analyze"
+    bl_label = "Curve Analyze"
+    bl_description = "Analyze the bezier acquired"
+
+    def execute(self, context):
+       sf = sce.sailflow_model
+       sf.maxcamber = max(sf.curvePoints)
+       sf.maxcamber_pos = sf.curvePoints.index(sf.maxcamber)
+
+       return {'FINISHED'}
+
 
 
 class LibraryLoader(bpy.types.Operator):
@@ -1623,7 +1632,8 @@ class AirFoilSettings(bpy.types.PropertyGroup):
 
     curvePoints = []
     curveName = bpy.props.StringProperty(name="object name")
-
+    maxcamber = FloatProperty(name="Max camber",default=0.0)
+    maxcamber_pos = FloatProperty(name="Max camber pos",default=0.0)
 
 class VIEW3D_PT_airprofile_parameters(bpy.types.Panel):
     bl_label = "Profile Generator"
@@ -1643,6 +1653,9 @@ class VIEW3D_PT_airprofile_parameters(bpy.types.Panel):
             col.prop(sce.sailflow_model, "p")
 
         elif sce.sailflow_model.t == "CURVE":
+            col.prop(sce.sailflow_model,"camber")
+            col.prop(sce.sailflow_model,"camber_pos")
+            col.operator("mesh.curve_analyze")
             col.operator("mesh.curve_aquire")
             col = layout.column(align=True)
 
