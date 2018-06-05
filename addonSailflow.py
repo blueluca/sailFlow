@@ -31,7 +31,7 @@ custom_profile = None
 
 Vxs = []
 FlatVxs = []
-Flattened = []
+FlattenedPolyList = []
 VxFlat = []
 flatObj = None
 bpy.selection = []
@@ -222,6 +222,14 @@ class MyPoly:
             return self.l3
         if a in [1, 3] and b in [1, 3]:
             return self.l1
+
+    def edgeStress(self):
+        s1 = (self.l1 - abs((Vxs[self.p1].co - Vxs[self.p3].co).length)) / self.l1
+        s2 = (self.l2 - abs((Vxs[self.p1].co - Vxs[self.p2].co).length)) / self.l2
+        s3 = (self.l3 - abs((Vxs[self.p2].co - Vxs[self.p3].co).length)) / self.l3
+        if abs(s1) > 1e-3 or abs(s2) > 1e-3 or abs(s3) > 1e-3:
+            print("Edges stress %2.2g %2.2g %2.2g" % (s1, s2, s3))
+            print(self)
 
     def NEWsetToFlat(self, a, b, flatted):
         xa = self.x(a)
@@ -548,45 +556,45 @@ class Flattener(bpy.types.Operator):
 
     def makeFlattened(self, obj, energyMinimizer, maxDeformation, deltaDeformation, polSeed):
         global Vxs
-        global Flattened
+        global FlattenedPolyList
         global VxFlat
 
         Adjacents = []
-        ToBeFlattened = []
+        ToBeFlattenedList = []
         Vxs = []
         VxFlat = []
         me = obj.data
         Vxs = me.vertices[:]
         for p in me.polygons:
             if p.select:
-                ToBeFlattened.append(MyPoly(p, idx=p.index))
+                ToBeFlattenedList.append(MyPoly(p, idx=p.index))
 
         if polSeed != -1:
-            for poly in ToBeFlattened:
-                if poly.idx == polSeed:
-                    Adjacents.append(poly)
-                    ToBeFlattened.remove(poly)
+            for toBeFlattenedPoly in ToBeFlattenedList:
+                if toBeFlattenedPoly.idx == polSeed:
+                    Adjacents.append(toBeFlattenedPoly)
+                    ToBeFlattenedList.remove(toBeFlattenedPoly)
                     break
 
-        while ToBeFlattened or Adjacents:
+        while ToBeFlattenedList or Adjacents:
             if Adjacents:
-                poly = Adjacents.pop(0)
+                toBeFlattenedPoly = Adjacents.pop(0)
             else:
-                poly = ToBeFlattened.pop()
-            # Collect all the adjacent triangle
-            # and put it in Active collection "A"
+                toBeFlattenedPoly = ToBeFlattenedList.pop()
             while 1:
-                adjPoly = self.findAdjacentNotFlat(ToBeFlattened, poly)
+                adjPoly = self.findAdjacentNotFlat(ToBeFlattenedList, toBeFlattenedPoly)
                 if adjPoly:
                     Adjacents.append(adjPoly)
-                    ToBeFlattened.remove(adjPoly)
+                    ToBeFlattenedList.remove(adjPoly)
                 else:
                     break
-            poly.flatten()
-            Flattened.append(poly)
+            print("Flattening:",toBeFlattenedPoly," adjecents are:",len(Adjacents))
+            toBeFlattenedPoly.flatten()
+            FlattenedPolyList.append(toBeFlattenedPoly)
+            toBeFlattenedPoly.edgeStress()
 
         if energyMinimizer:
-            return (self.minimizeEnergy(Flattened, maxDeformation, deltaDeformation))
+            return (self.minimizeEnergy(FlattenedPolyList, maxDeformation, deltaDeformation))
         else:
             return 0
 
@@ -598,7 +606,7 @@ class Flattener(bpy.types.Operator):
 
     def execute(self, context):
         global Vxs
-        global Flattened
+        global FlattenedPolyList
         global flatObj
 
         def boundingBoxAreaVectors(Vectors):
@@ -649,8 +657,8 @@ class Flattener(bpy.types.Operator):
             self.report({'ERROR'}, 'You must be in EDIT mode to flatten')
             return {'FINISHED'}
         #Erase the previuos list if existed
-        if Flattened:
-            del Flattened[:]
+        if FlattenedPolyList:
+            del FlattenedPolyList[:]
         if sce.sailflow_model.useSeed == False:
             lis = [(p.area,p.index) for p in polys]
             max_index = max(lis, key=lambda item: item[0])[1]
@@ -671,14 +679,14 @@ class Flattener(bpy.types.Operator):
         vIdxList = []
         faces = []
         vertices = []
-        for p in Flattened:
+        for p in FlattenedPolyList:
             vIdxList.append(p.p1)
             vIdxList.append(p.p2)
             vIdxList.append(p.p3)
         vIdxList.sort()
         # The following remove duplicates
         vIdxList = list(set(vIdxList))
-        for p in Flattened:
+        for p in FlattenedPolyList:
             p.p1 = vIdxList.index(p.p1)
             p.p2 = vIdxList.index(p.p2)
             p.p3 = vIdxList.index(p.p3)
@@ -694,6 +702,7 @@ class Flattener(bpy.types.Operator):
         #        fobj.matrix_world = bpy.context.active_object.matrix_world
         flatObj.scale = bpy.context.active_object.scale
         bpy.context.scene.objects.link(flatObj)
+
         # Set object location and layers num 6
         # flatObj.layers[5] = True
         # flatObj.layers[0] = False
@@ -1080,9 +1089,12 @@ class CurveAnalyze(Operator):
     bl_description = "Analyze the bezier acquired"
 
     def execute(self, context):
-       sf = sce.sailflow_model
-       sf.maxcamber = max(sf.curvePoints)
-       sf.maxcamber_pos = sf.curvePoints.index(sf.maxcamber)
+       sf = bpy.context.scene.sailflow_model
+       print(max([s[1] for s in sf.curvePoints]))
+       sf.maxcamber = max([k[1] for k in sf.curvePoints])
+       for s in sf.curvePoints:
+           if s[1] == sf.maxcamber:
+                sf.maxcamber_pos = s[0]
 
        return {'FINISHED'}
 
@@ -1653,8 +1665,8 @@ class VIEW3D_PT_airprofile_parameters(bpy.types.Panel):
             col.prop(sce.sailflow_model, "p")
 
         elif sce.sailflow_model.t == "CURVE":
-            col.prop(sce.sailflow_model,"camber")
-            col.prop(sce.sailflow_model,"camber_pos")
+            col.prop(sce.sailflow_model,"maxcamber")
+            col.prop(sce.sailflow_model,"maxcamber_pos")
             col.operator("mesh.curve_analyze")
             col.operator("mesh.curve_aquire")
             col = layout.column(align=True)
