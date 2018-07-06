@@ -75,45 +75,9 @@ class MyPoly:
         co2 = Vxs[a2].co
         co3 = Vxs[a3].co
 
-        #    print("Init ",a1,"-",co1,a2,"-",co2,a3,"-",co3)
-        # if self.clockWise(co1, co2, co3):
-        #     print("choice 1")
-        #     self.p1 = a1
-        #     self.p2 = a2
-        #     self.p3 = a3
-        # elif self.clockWise(co1, co3, co2):
-        #     print("choice 2")
-        #     self.p1 = a1
-        #     self.p2 = a3
-        #     self.p3 = a2
-        # elif self.clockWise(co2, co1, co3):
-        #     print("choice 3")
-        #     self.p1 = a2
-        #     self.p2 = a1
-        #     self.p3 = a3
-        # elif self.clockWise(co2, co3, co1):
-        #     print("choice 4")
-        #     self.p1 = a2
-        #     self.p2 = a3
-        #     self.p3 = a1
-        # elif self.clockWise(co3, co1, co2):
-        #     print("choice 5")
-        #     self.p1 = a3
-        #     self.p2 = a1
-        #     self.p3 = a2
-        # else:
-        #     print("choice obvious")
-        #     self.p1 = a3
-        #     self.p2 = a2
-        #     self.p3 = a1
-
-        #---------------T E S T---------------------
         self.p1 = a3
         self.p2 = a2
         self.p3 = a1
-        #----------------E N D-----------------------
-
-
 
         self.l1 = abs((Vxs[self.p1].co - Vxs[self.p3].co).length)
         self.l2 = abs((Vxs[self.p1].co - Vxs[self.p2].co).length)
@@ -622,6 +586,7 @@ class Flattener(bpy.types.Operator):
         global Vxs
         global FlattenedPolyList
         global flatObj
+        global sail_object
 
         def boundingBoxAreaVectors(Vectors):
             vx = [v.x for v in Vectors]
@@ -1092,7 +1057,7 @@ class CurveAquire(bpy.types.Operator):
             if obj.type == 'CURVE':
                 sce.sailflow_model.curvePoints.append(((v.x - minx) / l, (v.y - miny) / l))
             else:
-                sce.sailflow_model.curvePoints.append(((v.x - minx) / l, (v.z - miny) / l))
+                sce.sailflow_model.curvePoints.append(((v.x - minx) / l, (v.y - miny) / l))
 
         return {'FINISHED'}
 
@@ -1104,11 +1069,12 @@ class CurveAnalyze(Operator):
 
     def execute(self, context):
        sf = bpy.context.scene.sailflow_model
-       print(max([s[1] for s in sf.curvePoints]))
-       sf.maxcamber = max([k[1] for k in sf.curvePoints])
-       for s in sf.curvePoints:
-           if s[1] == sf.maxcamber:
-                sf.maxcamber_pos = s[0]
+#       sf.maxcamber = max([k[1] for k in sf.curvePoints])
+       maxp = max(sf.curvePoints, key=lambda p: p[1])
+       sf.maxcamber = maxp[1]
+       print("max in curve",sf.maxcamber)
+       sf.maxcamber_pos = maxp[0]
+       print("pas max in curve",sf.maxcamber_pos)
 
        return {'FINISHED'}
 
@@ -1348,7 +1314,7 @@ class printPDF(bpy.types.Operator):
             # print(" clipping: V2 already in ")
             vout1 = v2
 
-        v = mathutils.geometry.intersect_line_line_2d(v1, v2, Vector((0, 0, 0)), Vector((w, 0, 0)))
+        v = intersect_line_line_2d(v1, v2, Vector((0, 0, 0)), Vector((w, 0, 0)))
         if v:
             # print(" clipping: h bassa")
             if vout1 == None:
@@ -1356,7 +1322,7 @@ class printPDF(bpy.types.Operator):
             elif (v != vout1):
                 vout2 = v
                 return vout1, vout2
-        v = mathutils.geometry.intersect_line_line_2d(v1, v2, Vector((w, 0, 0)), Vector((w, h, 0)))
+        v = intersect_line_line_2d(v1, v2, Vector((w, 0, 0)), Vector((w, h, 0)))
         if v:
             # print(" clipping: v destra")
             if vout1 == None:
@@ -1364,7 +1330,7 @@ class printPDF(bpy.types.Operator):
             elif (v != vout1):
                 vout2 = v
                 return vout1, vout2
-        v = mathutils.geometry.intersect_line_line_2d(v1, v2, Vector((w, h, 0)), Vector((0, h, 0)))
+        v = intersect_line_line_2d(v1, v2, Vector((w, h, 0)), Vector((0, h, 0)))
         if v:
             # print(" clipping: h alta")
             if vout1 == None:
@@ -1372,7 +1338,7 @@ class printPDF(bpy.types.Operator):
             elif (v != vout1):
                 vout2 = v
                 return vout1, vout2
-        v = mathutils.geometry.intersect_line_line_2d(v1, v2, Vector((0, h, 0)), Vector((0, 0, 0)))
+        v = intersect_line_line_2d(v1, v2, Vector((0, h, 0)), Vector((0, 0, 0)))
         if v:
             # print(" clipping: v sinistra")
             if vout1 == None:
@@ -1544,9 +1510,9 @@ class outputAscii(bpy.types.Operator):
         xscan = xmin
         while xscan <= xmax:
             for e in pes:
-                iv = intersect_line_line_2d(Vector((xscan, ymin - 1, 0)), \
-                                                               Vector((xscan, ymax + 1, 0)), \
-                                                               vxs[e[0]].co, vxs[e[1]].co)
+                iv = intersect_line_line_2d(Vector((xscan, ymin - 1, 0)),
+                                            Vector((xscan, ymax + 1, 0)),
+                                            vxs[e[0]].co, vxs[e[1]].co)
                 if iv:
                     pnts.append((xscan, iv[0], iv[1]))
             xscan = xscan + plotDX / 100
@@ -1561,7 +1527,7 @@ class outputAscii(bpy.types.Operator):
 
         f.write(("\nCoordinates %d cm at distance\n") % (plotDX))
         for p in pnts:
-            s = ("[%2.3f] %2.3f %2.3f\n") % (p[0], p[1] - xmin, p[2] - ymin)
+            s = ("[%2.3f] %2.3f %2.3f\n") % (p[0]-xmin, p[1]-xmin, p[2]-ymin)
             f.write(s)
         f.close()
         return {'FINISHED'}
@@ -1666,6 +1632,7 @@ class VIEW3D_PT_airprofile_parameters(bpy.types.Panel):
     bl_space_type = "VIEW_3D"
     bl_region_type = "TOOLS"
     bl_category = "Sailflow Design"
+    bl_option = 'DEFAULT_CLOSED'
 
     def draw(self, context):
         sce = bpy.context.scene
@@ -1734,6 +1701,7 @@ class VIEW3D_PT_flattener_parameters(bpy.types.Panel):
     bl_space_type = "VIEW_3D"
     bl_region_type = "TOOLS"
     bl_category = "Sailflow Design"
+    bl_option = 'DEFAULT_CLOSED'
     bpy.types.Object.obj_property = bpy.props.FloatProperty(name="ObjectProperty")
 
     def areaSelectedFaces(self, obj):
@@ -1754,19 +1722,21 @@ class VIEW3D_PT_flattener_parameters(bpy.types.Panel):
         layout = self.layout
         col = layout.column(align=True)
 
-        col.prop(sce.sailflow_model, "energyMinimizer")
-        col.prop(sce.sailflow_model, "deltaDeformation")
-        col.prop(sce.sailflow_model, "maxDeformation")
-        col.prop(sce.sailflow_model, "useSeed")
-        col.prop(sce.sailflow_model, "polSeed")
-        col.prop(sce.sailflow_model, "resEnergy")
+        #col.prop(sce.sailflow_model, "energyMinimizer")
+        #col.prop(sce.sailflow_model, "deltaDeformation")
+        #col.prop(sce.sailflow_model, "maxDeformation")
+        #col.prop(sce.sailflow_model, "useSeed")
+        #col.prop(sce.sailflow_model, "polSeed")
+        #col.prop(sce.sailflow_model, "resEnergy")
 
         col = layout.column(align=True)
         col.operator("mesh.flattener")
         col.operator("mesh.highlight")
         box = layout.box()
 
-        areaS = self.areaSelectedFaces(bpy.context.active_object)
+        flatObj.update_from_editmode()
+        sail_object.update_from_editmode()
+        areaS = self.areaSelectedFaces(sail_object)
         areaF = self.areaSelectedFaces(flatObj)
 
         box.label(text="Area panel on sail m^2 =" + str(round(areaS, 5)))
@@ -1778,6 +1748,7 @@ class VIEW3D_PT_airprofile_print(bpy.types.Panel):
     bl_space_type = "VIEW_3D"
     bl_region_type = "TOOLS"
     bl_category = "Sailflow Design"
+    bl_option = 'DEFAULT_CLOSED'
 
     def draw(self, context):
         sce = bpy.context.scene
@@ -1808,6 +1779,7 @@ class VIEW3D_PT_analyse(bpy.types.Panel):
     bl_space_type = "VIEW_3D"
     bl_region_type = "TOOLS"
     bl_category = "Sailflow Design"
+    bl_option = 'DEFAULT_CLOSED'
 
     def draw(self, context):
         sce = bpy.context.scene
