@@ -76,30 +76,44 @@ class MyPoly:
         co3 = Vxs[a3].co
 
         #    print("Init ",a1,"-",co1,a2,"-",co2,a3,"-",co3)
-        if self.clockWise(co1, co2, co3):
-            self.p1 = a1
-            self.p2 = a2
-            self.p3 = a3
-        elif self.clockWise(co1, co3, co2):
-            self.p1 = a1
-            self.p2 = a3
-            self.p3 = a2
-        elif self.clockWise(co2, co1, co3):
-            self.p1 = a2
-            self.p2 = a1
-            self.p3 = a3
-        elif self.clockWise(co2, co3, co1):
-            self.p1 = a2
-            self.p2 = a3
-            self.p3 = a1
-        elif self.clockWise(co3, co1, co2):
-            self.p1 = a3
-            self.p2 = a1
-            self.p3 = a2
-        else:
-            self.p1 = a3
-            self.p2 = a2
-            self.p3 = a1
+        # if self.clockWise(co1, co2, co3):
+        #     print("choice 1")
+        #     self.p1 = a1
+        #     self.p2 = a2
+        #     self.p3 = a3
+        # elif self.clockWise(co1, co3, co2):
+        #     print("choice 2")
+        #     self.p1 = a1
+        #     self.p2 = a3
+        #     self.p3 = a2
+        # elif self.clockWise(co2, co1, co3):
+        #     print("choice 3")
+        #     self.p1 = a2
+        #     self.p2 = a1
+        #     self.p3 = a3
+        # elif self.clockWise(co2, co3, co1):
+        #     print("choice 4")
+        #     self.p1 = a2
+        #     self.p2 = a3
+        #     self.p3 = a1
+        # elif self.clockWise(co3, co1, co2):
+        #     print("choice 5")
+        #     self.p1 = a3
+        #     self.p2 = a1
+        #     self.p3 = a2
+        # else:
+        #     print("choice obvious")
+        #     self.p1 = a3
+        #     self.p2 = a2
+        #     self.p3 = a1
+
+        #---------------T E S T---------------------
+        self.p1 = a3
+        self.p2 = a2
+        self.p3 = a1
+        #----------------E N D-----------------------
+
+
 
         self.l1 = abs((Vxs[self.p1].co - Vxs[self.p3].co).length)
         self.l2 = abs((Vxs[self.p1].co - Vxs[self.p2].co).length)
@@ -588,7 +602,7 @@ class Flattener(bpy.types.Operator):
                     ToBeFlattenedList.remove(adjPoly)
                 else:
                     break
-            print("Flattening:",toBeFlattenedPoly," adjecents are:",len(Adjacents))
+            #print("Flattening:",toBeFlattenedPoly," adjecents are:",len(Adjacents))
             toBeFlattenedPoly.flatten()
             FlattenedPolyList.append(toBeFlattenedPoly)
             toBeFlattenedPoly.edgeStress()
