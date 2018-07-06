@@ -1057,7 +1057,7 @@ class CurveAquire(bpy.types.Operator):
             if obj.type == 'CURVE':
                 sce.sailflow_model.curvePoints.append(((v.x - minx) / l, (v.y - miny) / l))
             else:
-                sce.sailflow_model.curvePoints.append(((v.x - minx) / l, (v.y - miny) / l))
+                sce.sailflow_model.curvePoints.append(((v.x - minx) / l, (v.z - miny) / l))
 
         return {'FINISHED'}
 
@@ -1722,9 +1722,9 @@ class VIEW3D_PT_flattener_parameters(bpy.types.Panel):
         layout = self.layout
         col = layout.column(align=True)
 
-        #col.prop(sce.sailflow_model, "energyMinimizer")
-        #col.prop(sce.sailflow_model, "deltaDeformation")
-        #col.prop(sce.sailflow_model, "maxDeformation")
+        col.prop(sce.sailflow_model, "energyMinimizer")
+        col.prop(sce.sailflow_model, "deltaDeformation")
+        col.prop(sce.sailflow_model, "maxDeformation")
         #col.prop(sce.sailflow_model, "useSeed")
         #col.prop(sce.sailflow_model, "polSeed")
         #col.prop(sce.sailflow_model, "resEnergy")
