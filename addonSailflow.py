@@ -626,6 +626,7 @@ class Flattener(bpy.types.Operator):
         # Check if all selected faces are triangles
         # before start
         sail_object = bpy.context.active_object
+        bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
         polys = sail_object.data.polygons
         for p in polys:
             if p.select and len(p.vertices) > 3:
@@ -1479,8 +1480,16 @@ class outputAscii(bpy.types.Operator):
         plotDX = sce.sailflow_model.asciiDx
 
         obj = context.active_object
+        bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
         # finds the minimum and max X of the panel scanning all vertices
-        vxs = [(v.co.x, v.co.y, idx) for idx, v in enumerate(obj.data.vertices)]
+        se = sce.sailflow_model
+        if se.rotatePage:
+            vecs = [Vector(v.co) for v in obj.data.vertices]
+            for v in vecs:
+                v.rotate(Euler((0,0,radians(90)),"XYZ"))
+            vxs = [(v.x,v.y,idx) for idx,v in enumerate(vecs)]
+        else:
+            vxs = [(v.co.x, v.co.y, idx) for idx, v in enumerate(obj.data.vertices)]
         xmin = min(vxs, key=lambda t: t[0])[0]
         xmax = max(vxs, key=lambda t: t[0])[0]
         ymin = min(vxs, key=lambda t: t[1])[1]
@@ -1497,13 +1506,13 @@ class outputAscii(bpy.types.Operator):
                 if (e[0] == e2[0]) or (e[0] == e2[1]):
                     v1 = vxs[e[0]].co - vxs[e[1]].co
                     v2 = vxs[e2[0]].co - vxs[e2[1]].co
-                    if radians(10) < v1.angle(v2) < radians(120):
+                    if radians(5) < v1.angle(v2) < radians(175):
                         if not vxs[e[0]].co in corners:
                             corners.append(vxs[e[0]].co)
                 elif (e[1] == e2[0]) or (e[1] == e2[1]):
                     v1 = vxs[e[0]].co - vxs[e[1]].co
                     v2 = vxs[e2[0]].co - vxs[e2[1]].co
-                    if radians(10) < v1.angle(v2) < radians(120):
+                    if radians(5) < v1.angle(v2) < radians(175):
                         if not vxs[e[1]].co in corners:
                             corners.append(vxs[e[1]].co)
 
@@ -1619,6 +1628,7 @@ class AirFoilSettings(bpy.types.PropertyGroup):
 
     resolution = IntProperty(name="Resolution", min=10, max=200)
     asciiDx = IntProperty(name="X step cm", min=1, max=100)
+    rotatePage = BoolProperty(name="Rotate before print",default=False)
     steps = IntProperty(name="Loft steps", min=5, max=100)
     spans = IntProperty(name="Loft spans", min=5, max=100)
 
@@ -1772,6 +1782,7 @@ class VIEW3D_PT_airprofile_print(bpy.types.Panel):
         #
         col = layout.column(align=True)
         col.prop(sce.sailflow_model, "asciiDx")
+        col.prop(sce.sailflow_model,"rotatePage")
         col.operator("mesh.print_ascii")
 
 class VIEW3D_PT_analyse(bpy.types.Panel):
